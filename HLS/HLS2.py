@@ -21,21 +21,18 @@ import earthaccess
 
 import colored_logging as cl
 
-import ecostress_cmr
 import rasters as rt
-
-from HLS import HLSGranule, HLSGranuleID, HLSSentinelGranule, CLOUD_CMAP, \
-    WATER_CMAP, HLS, HLSLandsatGranule, HLSNotAvailable, HLSLandsatMissing, HLSLandsatNotAvailable, HLSSentinelMissing, \
-    HLSSentinelNotAvailable, HLSDownloadFailed, HLSServerUnreachable
-from daterange import date_range
 from rasters import Raster
-from timer import Timer
+
+from .daterange import date_range
+from .timer import Timer
+from .HLS import *
 
 with open(join(abspath(dirname(__file__)), "version.txt")) as f:
     version = f.read()
 
 __version__ = version
-__author__ = "Gregory H. Halverson"
+__author__ = "Gregory H. Halverson, Evan Davis"
 
 CMR_STAC_URL = "https://cmr.earthdata.nasa.gov/stac/LPCLOUD"
 WORKING_DIRECTORY = "."

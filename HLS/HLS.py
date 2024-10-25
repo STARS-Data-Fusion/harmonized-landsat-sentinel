@@ -20,18 +20,20 @@ from dateutil import parser
 from matplotlib.colors import LinearSegmentedColormap
 
 import colored_logging as cl
+
 import rasters as rt
-from daterange import date_range
 from rasters import Raster, MultiRaster, SpatialGeometry, RasterGeometry
+
 from sentinel_tile_grid import SentinelTileGrid
-from timer import Timer
-from DAAC.HTTP import CONNECTION_CLOSE
+
+from .daterange import date_range
+from .timer import Timer
 
 with open(join(abspath(dirname(__file__)), "version.txt")) as f:
     version = f.read()
 
 __version__ = version
-__author__ = "Gregory H. Halverson"
+__author__ = "Gregory H. Halverson, Evan Davis"
 
 DEFAULT_REMOTE = "https://hls.gsfc.nasa.gov/data/v1.4/"
 DEFAULT_WORKING_DIRECTORY = "."
@@ -39,6 +41,10 @@ DEFAULT_DOWNLOAD_DIRECTORY = "HLS_download"
 DEFAULT_PRODUCTS_DIRECTORY = "HLS_products"
 DEFAULT_TARGET_RESOLUTION = 30
 DEFAULT_PRODUCTS = ["NIR", "red"]
+
+CONNECTION_CLOSE = {
+    "Connection": "close",
+}
 
 NDVI_CMAP = LinearSegmentedColormap.from_list(
     name="NDVI",

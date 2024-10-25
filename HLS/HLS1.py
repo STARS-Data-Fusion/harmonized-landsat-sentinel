@@ -16,18 +16,17 @@ from dateutil import parser
 
 import colored_logging as cl
 import rasters as rt
-from HLS import HLS, HLSGranule, HLSSentinelGranule, HLSLandsatGranule, HLSGranuleID, HLSTileNotAvailable, \
-    HLSLandsatNotAvailable, HLSLandsatMissing, HLSDownloadFailed, HLSSentinelNotAvailable, HLSSentinelMissing, \
-    HLSNotAvailable
-from daterange import date_range
 from rasters import Raster, MultiRaster
-from timer import Timer
+
+from .daterange import date_range
+from .timer import Timer
+from .HLS import *
 
 with open(join(abspath(dirname(__file__)), "version.txt")) as f:
     version = f.read()
 
 __version__ = version
-__author__ = "Gregory H. Halverson"
+__author__ = "Gregory H. Halverson, Evan Davis"
 
 DEFAULT_REMOTE = "https://hls.gsfc.nasa.gov/data/v1.4/"
 DEFAULT_WORKING_DIRECTORY = "."
