@@ -14,20 +14,19 @@ import pandas as pd
 import rasterio
 from dateutil import parser
 
-import colored_logging
+import colored_logging as cl
 import rasters as rt
-from ETtoolbox.HLS import HLS, HLSGranule, HLSSentinelGranule, HLSLandsatGranule, HLSGranuleID, HLSTileNotAvailable, \
-    HLSLandsatNotAvailable, HLSLandsatMissing, HLSDownloadFailed, HLSSentinelNotAvailable, HLSSentinelMissing, \
-    HLSNotAvailable
-from ETtoolbox.daterange import date_range
 from rasters import Raster, MultiRaster
-from ETtoolbox.timer import Timer
+
+from .daterange import date_range
+from .timer import Timer
+from .HLS import *
 
 with open(join(abspath(dirname(__file__)), "version.txt")) as f:
     version = f.read()
 
 __version__ = version
-__author__ = "Gregory H. Halverson"
+__author__ = "Gregory H. Halverson, Evan Davis"
 
 DEFAULT_REMOTE = "https://hls.gsfc.nasa.gov/data/v1.4/"
 DEFAULT_WORKING_DIRECTORY = "."
@@ -215,7 +214,7 @@ class HLS1(HLS):
 
         return df
 
-    def listing(self, tile: str, start: Union[date, str], end: Union[date, str] = None) -> pd.DataFrame:
+    def listing(self, tile: str, start_UTC: Union[date, str], end_UTC: Union[date, str] = None) -> pd.DataFrame:
         SENTINEL_REPEAT_DAYS = 5
         LANDSAT_REPEAT_DAYS = 16
         GIVEUP_DAYS = 10
@@ -224,28 +223,28 @@ class HLS1(HLS):
 
         timer = Timer()
         self.logger.info(
-            f"started listing available HLS2 granules at tile {colored_logging.place(tile)} from {colored_logging.time(start)} to {colored_logging.time(end)}")
+            f"started listing available HLS2 granules at tile {cl.place(tile)} from {cl.time(start_UTC)} to {cl.time(end_UTC)}")
 
-        if isinstance(start, str):
-            start = parser.parse(start).date()
+        if isinstance(start_UTC, str):
+            start_UTC = parser.parse(start_UTC).date()
 
-        if end is None:
-            end = start
+        if end_UTC is None:
+            end_UTC = start_UTC
 
-        if isinstance(end, str):
-            end = parser.parse(end).date()
+        if isinstance(end_UTC, str):
+            end_UTC = parser.parse(end_UTC).date()
 
         giveup_date = datetime.utcnow().date() - timedelta(days=GIVEUP_DAYS)
-        search_start = start - timedelta(days=max(SENTINEL_REPEAT_DAYS, LANDSAT_REPEAT_DAYS))
+        search_start = start_UTC - timedelta(days=max(SENTINEL_REPEAT_DAYS, LANDSAT_REPEAT_DAYS))
         start_year = search_start.year
-        end_year = end.year
+        end_year = end_UTC.year
         listing = pd.concat([self.year_listing(tile=tile, year=year) for year in range(start_year, end_year + 1)])
-        listing = listing[listing.date_UTC <= str(end)]
+        listing = listing[listing.date_UTC <= str(end_UTC)]
         sentinel_dates = set([timestamp.date() for timestamp in list(listing[~listing.sentinel.isna()].date_UTC)])
 
         if len(sentinel_dates) > 0:
             # for date_UTC in [dt.date() for dt in rrule(DAILY, dtstart=max(sentinel_dates), until=end)]:
-            for date_UTC in date_range(max(sentinel_dates), end):
+            for date_UTC in date_range(max(sentinel_dates), end_UTC):
                 previous_pass = date_UTC - timedelta(SENTINEL_REPEAT_DAYS)
 
                 if previous_pass in sentinel_dates:
@@ -254,17 +253,17 @@ class HLS1(HLS):
         landsat_dates = set([timestamp.date() for timestamp in list(listing[~listing.landsat.isna()].date_UTC)])
 
         if len(landsat_dates) > 0:
-            for date_UTC in date_range(max(landsat_dates), end):
+            for date_UTC in date_range(max(landsat_dates), end_UTC):
                 previous_pass = date_UTC - timedelta(LANDSAT_REPEAT_DAYS)
 
                 if previous_pass in landsat_dates:
                     landsat_dates.add(date_UTC)
 
-        listing = listing[listing.date_UTC >= str(start)]
+        listing = listing[listing.date_UTC >= str(start_UTC)]
         listing.date_UTC = listing.date_UTC.apply(
             lambda date_UTC: parser.parse(str(date_UTC)).date().strftime("%Y-%m-%d"))
         dates = pd.DataFrame(
-            {"date_UTC": [date_UTC.strftime("%Y-%m-%d") for date_UTC in date_range(start, end)], "tile": tile})
+            {"date_UTC": [date_UTC.strftime("%Y-%m-%d") for date_UTC in date_range(start_UTC, end_UTC)], "tile": tile})
         listing = pd.merge(dates, listing, how="left")
         listing.date_UTC = listing.date_UTC.apply(lambda date_UTC: parser.parse(date_UTC).date())
         listing = listing.sort_values(by="date_UTC")
@@ -290,7 +289,7 @@ class HLS1(HLS):
         listing["landsat"] = listing.apply(lambda row: "missing" if row.landsat_missing else row.landsat, axis=1)
         listing = listing[["date_UTC", "tile", "sentinel", "landsat"]]
         self.logger.info(
-            f"finished listing available HLS2 granules at tile {colored_logging.place(tile)} from {colored_logging.time(start)} to {colored_logging.time(end)} ({timer})")
+            f"finished listing available HLS2 granules at tile {cl.place(tile)} from {cl.time(start_UTC)} to {cl.time(end_UTC)} ({timer})")
 
         return listing
 
@@ -298,17 +297,17 @@ class HLS1(HLS):
         if isinstance(date_UTC, str):
             date_UTC = parser.parse(date_UTC).date()
 
-        listing = self.listing(tile=tile, start=(date_UTC - timedelta(days=5)), end=date_UTC)
+        listing = self.listing(tile=tile, start_UTC=(date_UTC - timedelta(days=5)), end_UTC=date_UTC)
         filename = str(listing.iloc[-1].sentinel)
 
         if filename == "nan":
             # self.logger.error(listing[["date_UTC", "sentinel"]])
             self.mark_date_unavailable("Sentinel", tile, date_UTC)
-            raise HLSSentinelNotAvailable(f"Sentinel is not available at tile {colored_logging.place(tile)} on {colored_logging.time(date_UTC)}")
+            raise HLSSentinelNotAvailable(f"Sentinel is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}")
         elif filename == "missing":
             # self.logger.error(listing[["date_UTC", "sentinel"]])
             raise HLSSentinelMissing(
-                f"Sentinel is missing on remote server at tile {colored_logging.place(tile)} on {colored_logging.time(date_UTC)}")
+                f"Sentinel is missing on remote server at tile {cl.place(tile)} on {cl.time(date_UTC)}")
         else:
             return filename
 
@@ -326,14 +325,14 @@ class HLS1(HLS):
         if isinstance(date_UTC, str):
             date_UTC = parser.parse(date_UTC).date()
 
-        filename = str(self.listing(tile=tile, start=date_UTC, end=date_UTC).iloc[0].landsat)
+        filename = str(self.listing(tile=tile, start_UTC=date_UTC, end_UTC=date_UTC).iloc[0].landsat)
 
         if filename == "nan":
             self.mark_date_unavailable("Landsat", tile, date_UTC)
-            raise HLSLandsatNotAvailable(f"Landsat is not available at tile {colored_logging.place(tile)} on {colored_logging.time(date_UTC)}")
+            raise HLSLandsatNotAvailable(f"Landsat is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}")
         elif filename == "missing":
             raise HLSLandsatMissing(
-                f"Landsat is missing on remote server at tile {colored_logging.place(tile)} on {colored_logging.time(date_UTC)}")
+                f"Landsat is missing on remote server at tile {cl.place(tile)} on {cl.time(date_UTC)}")
         else:
             return filename
 
@@ -353,17 +352,17 @@ class HLS1(HLS):
             os.remove(filename)
 
         if exists(filename):
-            self.logger.info(f"file already downloaded: {colored_logging.file(filename)}")
+            self.logger.info(f"file already downloaded: {cl.file(filename)}")
             return filename
 
-        self.logger.info(f"downloading: {colored_logging.URL(URL)} -> {colored_logging.file(filename)}")
+        self.logger.info(f"downloading: {cl.URL(URL)} -> {cl.file(filename)}")
         directory = dirname(filename)
         makedirs(directory, exist_ok=True)
         partial_filename = f"{filename}.download"
         command = f'wget -c -O "{partial_filename}" "{URL}"'
         timer = Timer()
         system(command)
-        self.logger.info(f"completed download in {colored_logging.time(timer)} seconds: " + colored_logging.file(filename))
+        self.logger.info(f"completed download in {cl.time(timer)} seconds: " + cl.file(filename))
 
         if not exists(partial_filename):
             raise HLSDownloadFailed(f"unable to download URL: {URL}")
@@ -392,7 +391,7 @@ class HLS1(HLS):
             date_UTC = parser.parse(date_UTC).date()
 
         if self.check_unavailable_date("Sentinel", tile, date_UTC):
-            raise HLSSentinelNotAvailable(f"Sentinel is not available at tile {colored_logging.place(tile)} on {colored_logging.time(date_UTC)}")
+            raise HLSSentinelNotAvailable(f"Sentinel is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}")
 
         directory = self.local_directory(date_UTC=date_UTC)
         pattern = join(directory, f"HLS.S30.T{tile[:5]}.{date_UTC:%Y%j}.*.hdf")
@@ -400,7 +399,7 @@ class HLS1(HLS):
 
         if len(candidates) > 0:
             filename = candidates[-1]
-            logger.info(f"found HLS2 Landsat file: {colored_logging.file(filename)}")
+            logger.info(f"found HLS2 Landsat file: {cl.file(filename)}")
             return filename
 
         filename_base = self.sentinel_filename(tile=tile, date_UTC=date_UTC)
@@ -413,14 +412,14 @@ class HLS1(HLS):
             date_UTC = parser.parse(date_UTC).date()
 
         if self.check_unavailable_date("Landsat", tile, date_UTC):
-            raise HLSLandsatNotAvailable(f"Landsat is not available at tile {colored_logging.place(tile)} on {colored_logging.time(date_UTC)}")
+            raise HLSLandsatNotAvailable(f"Landsat is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}")
 
         directory = self.local_directory(date_UTC=date_UTC)
         candidates = sorted(glob(join(directory, f"HLS.L30.T{tile[:5]}.{date_UTC:%Y%j}.*.hdf")))
 
         if len(candidates) > 0:
             filename = candidates[-1]
-            logger.info(f"found HLS2 Landsat file: {colored_logging.file(filename)}")
+            logger.info(f"found HLS2 Landsat file: {cl.file(filename)}")
             return filename
 
         filename_base = self.landsat_filename(tile=tile, date_UTC=date_UTC)
@@ -432,13 +431,13 @@ class HLS1(HLS):
         if isinstance(date_UTC, str):
             date_UTC = parser.parse(date_UTC).date()
 
-        logger.info(f"searching for Sentinel tile {colored_logging.name(tile)} on {colored_logging.time(date_UTC)}")
+        logger.info(f"searching for Sentinel tile {cl.name(tile)} on {cl.time(date_UTC)}")
         filename = self.local_sentinel_filename(tile=tile, date_UTC=date_UTC)
 
         if exists(filename):
-            logger.info(f"Sentinel tile {colored_logging.name(tile)} found on {colored_logging.time(date_UTC)}: {filename}")
+            logger.info(f"Sentinel tile {cl.name(tile)} found on {cl.time(date_UTC)}: {filename}")
         if not exists(filename):
-            logger.info(f"retrieving Sentinel tile {colored_logging.name(tile)} on {colored_logging.time(date_UTC)}: {filename}")
+            logger.info(f"retrieving Sentinel tile {cl.name(tile)} on {cl.time(date_UTC)}: {filename}")
             URL = self.sentinel_URL(tile=tile, date_UTC=date_UTC)
             self.download_file(URL, filename)
 
@@ -450,13 +449,13 @@ class HLS1(HLS):
         if isinstance(date_UTC, str):
             date_UTC = parser.parse(date_UTC).date()
 
-        logger.info(f"searching for Landsat tile {colored_logging.name(tile)} on {colored_logging.time(date_UTC)}")
+        logger.info(f"searching for Landsat tile {cl.name(tile)} on {cl.time(date_UTC)}")
         filename = self.local_landsat_filename(tile=tile, date_UTC=date_UTC)
 
         if exists(filename):
-            logger.info(f"Landsat tile {colored_logging.name(tile)} found on {colored_logging.time(date_UTC)}: {filename}")
+            logger.info(f"Landsat tile {cl.name(tile)} found on {cl.time(date_UTC)}: {filename}")
         if not exists(filename):
-            logger.info(f"retrieving Landsat tile {colored_logging.name(tile)} on {colored_logging.time(date_UTC)}: {filename}")
+            logger.info(f"retrieving Landsat tile {cl.name(tile)} on {cl.time(date_UTC)}: {filename}")
             URL = self.landsat_URL(tile=tile, date_UTC=date_UTC)
             self.download_file(URL, filename)
 
@@ -492,7 +491,7 @@ class HLS1(HLS):
             if return_filename:
                 return product_filename
             else:
-                self.logger.info(f"loading HLS2 NDVI: {colored_logging.file(product_filename)}")
+                self.logger.info(f"loading HLS2 NDVI: {cl.file(product_filename)}")
                 return Raster.open(product_filename, geometry=target_geometry)
 
         try:
@@ -524,11 +523,11 @@ class HLS1(HLS):
             NDVI = NDVI.to_geometry(geometry, resampling="cubic")
 
         if (save_data or return_filename) and not exists(product_filename):
-            self.logger.info(f"saving HLS2 NDVI: {colored_logging.file(product_filename)}")
+            self.logger.info(f"saving HLS2 NDVI: {cl.file(product_filename)}")
             NDVI.to_COG(product_filename)
 
             if save_preview:
-                self.logger.info(f"saving HLS2 NDVI preview: {colored_logging.file(preview_filename)}")
+                self.logger.info(f"saving HLS2 NDVI preview: {cl.file(preview_filename)}")
                 NDVI.to_geojpeg(preview_filename)
 
         NDVI = NDVI.to_geometry(target_geometry)
@@ -581,7 +580,7 @@ class HLS1(HLS):
             if return_filename:
                 return product_filename
             else:
-                self.logger.info(f"loading HLS2 albedo: {colored_logging.file(product_filename)}")
+                self.logger.info(f"loading HLS2 albedo: {cl.file(product_filename)}")
                 return Raster.open(product_filename, geometry=target_geometry)
 
         try:
@@ -614,11 +613,11 @@ class HLS1(HLS):
             albedo = albedo.to_geometry(geometry, resampling="cubic")
 
         if (save_data or return_filename) and not exists(product_filename):
-            self.logger.info(f"saving HLS2 albedo: {colored_logging.file(product_filename)}")
+            self.logger.info(f"saving HLS2 albedo: {cl.file(product_filename)}")
             albedo.to_COG(product_filename)
 
             if save_preview:
-                self.logger.info(f"saving HLS2 albedo preview: {colored_logging.file(preview_filename)}")
+                self.logger.info(f"saving HLS2 albedo preview: {cl.file(preview_filename)}")
                 albedo.to_geojpeg(preview_filename)
 
         albedo = albedo.to_geometry(target_geometry)
