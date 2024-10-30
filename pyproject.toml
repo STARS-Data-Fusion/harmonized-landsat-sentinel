@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=60", "setuptools-scm>=8.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "HLS"
+version = "1.0.0"
+description = "Harmonized Landsat Sentinel (HLS) search and download utility"
+readme = "README.md"
+authors = [
+    { name = "Gregory H. Halverson", email = "gregory.h.halverson@jpl.nasa.gov" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pandas",
+    "pillow",
+    "geopandas",
+    "h5py",
+    "matplotlib",
+    "msgpack",
+    "msgpack_numpy",
+    "numpy",
+    "pyproj",
+    "rasterio",
+    "shapely",
+    "scikit-image",
+    "affine",
+    "astropy",
+    "pykdtree",
+    "pyresample",
+    "scipy",
+    "six",
+]
+
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov",  # For test coverage reports (optional)
+]
+
+[tool.setuptools.package-data]
+HLS = ["*.txt"]
+
+[project.urls]
+"Homepage" = "https://github.com/STARS-Data-Fusion/HLS"
