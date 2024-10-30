@@ -20,11 +20,11 @@ dependencies = [
     "rasterio",
     "requests",
     "beautifulsoup4",
-    "dateutil",
+    "python-dateutil",
     "matplotlib",
-    "colored_logging",
+    "colored-logging",
     "rasters",
-    "sentinel_tile_grid",
+    "sentinel-tiles",
     "earthaccess",
     "shapely"
 ]
