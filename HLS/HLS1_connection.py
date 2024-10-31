@@ -1,13 +1,30 @@
-from os import path
+import os
+from glob import glob
+from shutil import move
+from typing import Union
 
-from HLS.HLS1_landsat_granule import HLS1LandsatGranule
-from HLS.HLS1_sentinel_granule import HLS1SentinelGranule
-from HLS.HLS_connection import HLSConnection
-from HLS.constants import DEFAULT_HLS1_REMOTE, DEFAULT_WORKING_DIRECTORY, DEFAULT_HLS1_DOWNLOAD_DIRECTORY, \
-    DEFAULT_HLS1_PRODUCTS_DIRECTORY, DEFAULT_TARGET_RESOLUTION
-from HLS.exceptions import HLSTileNotAvailable, HLSSentinelNotAvailable, HLSSentinelMissing, HLSLandsatNotAvailable, \
-    HLSLandsatMissing, HLSDownloadFailed, HLSNotAvailable
+from os.path import exists, getsize, dirname, join
+import posixpath
+import logging
+from datetime import date, datetime, timedelta
+from dateutil import parser
 
+import numpy as np
+import pandas as pd
+import rasters as rt
+from rasters import Raster
+
+import colored_logging as cl
+
+from .constants import *
+from .exceptions import *
+from .timer import Timer
+from .daterange import date_range
+from .HLS1_landsat_granule import HLS1LandsatGranule
+from .HLS1_sentinel_granule import HLS1SentinelGranule
+from .HLS_connection import HLSConnection
+
+logger = logging.getLogger(__name__)
 
 class HLS1Connection(HLSConnection):
     logger = logging.getLogger(__name__)
@@ -230,11 +247,11 @@ class HLS1Connection(HLSConnection):
 
         self.logger.info(f"downloading: {cl.URL(URL)} -> {cl.file(filename)}")
         directory = dirname(filename)
-        makedirs(directory, exist_ok=True)
+        os.makedirs(directory, exist_ok=True)
         partial_filename = f"{filename}.download"
         command = f'wget -c -O "{partial_filename}" "{URL}"'
         timer = Timer()
-        system(command)
+        os.system(command)
         self.logger.info(f"completed download in {cl.time(timer)} seconds: " + cl.file(filename))
 
         if not exists(partial_filename):

@@ -1,12 +1,16 @@
+from matplotlib.colors import LinearSegmentedColormap
+
 DEFAULT_REMOTE = "https://hls.gsfc.nasa.gov/data/v1.4/"
 DEFAULT_WORKING_DIRECTORY = "."
 DEFAULT_DOWNLOAD_DIRECTORY = "HLS_download"
 DEFAULT_PRODUCTS_DIRECTORY = "HLS_products"
 DEFAULT_TARGET_RESOLUTION = 30
 DEFAULT_PRODUCTS = ["NIR", "red"]
+
 CONNECTION_CLOSE = {
     "Connection": "close",
 }
+
 NDVI_CMAP = LinearSegmentedColormap.from_list(
     name="NDVI",
     colors=[
@@ -18,6 +22,7 @@ NDVI_CMAP = LinearSegmentedColormap.from_list(
         (1, "#325e32")
     ]
 )
+
 ALBEDO_CMAP = LinearSegmentedColormap.from_list(name="albedo", colors=["black", "white"])
 RED_CMAP = LinearSegmentedColormap.from_list(name="red", colors=["black", "red"])
 BLUE_CMAP = LinearSegmentedColormap.from_list(name="blue", colors=["black", "blue"])

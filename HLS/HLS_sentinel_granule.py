@@ -1,5 +1,7 @@
-from HLS import HLSGranule, BLUE_CMAP, GREEN_CMAP, RED_CMAP, ALBEDO_CMAP
+from rasters import Raster, MultiRaster
 
+from .constants import *
+from .HLS_granule import HLSGranule
 
 class HLSSentinelGranule(HLSGranule):
     @property

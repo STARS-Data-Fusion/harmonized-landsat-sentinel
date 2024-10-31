@@ -9,18 +9,27 @@ from os import makedirs, system
 from os.path import join, abspath, expanduser, exists, getsize, dirname
 from shutil import move
 from typing import Union, List
-
+import logging
 import numpy as np
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from dateutil import parser
+from sentinel_tiles import SentinelTileGrid
 
-from HLS import DEFAULT_WORKING_DIRECTORY, DEFAULT_DOWNLOAD_DIRECTORY, DEFAULT_PRODUCTS_DIRECTORY, \
-    DEFAULT_TARGET_RESOLUTION, CONNECTION_CLOSE, HLSServerUnreachable, Timer, date_range, HLSSentinelNotAvailable, \
-    HLSSentinelMissing, HLSLandsatNotAvailable, HLSLandsatMissing, logger, HLSDownloadFailed, HLSSentinelGranule, \
-    HLSLandsatGranule, HLSNotAvailable, DEFAULT_PRODUCTS
+import colored_logging as cl
 
+import rasters as rt
+from rasters import Raster, RasterGeometry, SpatialGeometry
+
+from .HLS_landsat_granule import HLSLandsatGranule
+from .HLS_sentinel_granule import HLSSentinelGranule
+from .constants import *
+from .exceptions import *
+from .timer import Timer
+from .daterange import date_range
+
+logger = logging.getLogger(__name__)
 
 class HLSConnection:
     logger = logging.getLogger(__name__)

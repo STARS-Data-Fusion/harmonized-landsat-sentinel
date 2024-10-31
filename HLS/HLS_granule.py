@@ -5,7 +5,10 @@ from typing import List, Union
 import numpy as np
 import rasterio
 
-from HLS import NDVI_CMAP
+import rasters as rt
+from rasters import Raster, MultiRaster
+
+from .constants import *
 
 
 class HLSGranule:

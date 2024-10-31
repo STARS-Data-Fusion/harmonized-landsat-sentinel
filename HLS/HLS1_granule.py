@@ -2,10 +2,14 @@ from abc import abstractmethod
 from os.path import basename
 from typing import List
 
-import numpy
+import rasterio
 
-from HLS import HLSGranuleID
-from HLS.HLS_granule import HLSGranule
+import numpy as np
+import rasters as rt
+from rasters import Raster, MultiRaster
+
+from .HLS_granule_ID import HLSGranuleID
+from .HLS_granule import HLSGranule
 
 
 class HLS1Granule(HLSGranule):

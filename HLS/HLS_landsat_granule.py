@@ -1,5 +1,8 @@
-from HLS import HLSGranule, BLUE_CMAP, GREEN_CMAP, RED_CMAP, ALBEDO_CMAP
+import rasters as rt
+from rasters import Raster
 
+from .constants import *
+from .HLS_granule import HLSGranule
 
 class HLSLandsatGranule(HLSGranule):
     @property

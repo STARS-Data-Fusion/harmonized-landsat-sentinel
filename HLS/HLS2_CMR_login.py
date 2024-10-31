@@ -1,7 +1,9 @@
 import netrc
 import os
 
-from HLS import CMRServerUnreachable
+import earthaccess
+
+from .exceptions import *
 
 
 def HLS2_CMR_login() -> earthaccess.Auth:

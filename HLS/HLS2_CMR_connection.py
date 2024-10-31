@@ -1,9 +1,10 @@
-from traceback import format_exception
-from typing import Union, List
+from typing import Union, List, Set
 
+from time import sleep
+from traceback import format_exception
 from os.path import abspath, expanduser, join, exists
 import logging
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from dateutil import parser
 
 import pandas as pd
@@ -25,6 +26,8 @@ from .get_CMR_granule_ID import get_CMR_granule_ID
 from .HLS2_sentinel_granule import HLS2SentinelGranule
 from .HLS2_landsat_granule import HLS2LandsatGranule
 from .HLS_CMR_query import HLS_CMR_query
+from .timer import Timer
+from .daterange import date_range
 
 logger = logging.getLogger(__name__)
 
@@ -513,7 +516,7 @@ class HLS2CMRConnection(HLSConnection):
         listing = self.listing(tile=tile, start_UTC=date_UTC, end_UTC=date_UTC)
         granule = listing.iloc[-1].sentinel
 
-        if isinstance(granule, float) and isnan(granule):
+        if isinstance(granule, float) and np.isnan(granule):
             self.mark_date_unavailable("Sentinel", tile, date_UTC)
             raise HLSSentinelNotAvailable(f"Sentinel is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}")
         elif granule == "missing":
@@ -529,11 +532,11 @@ class HLS2CMRConnection(HLSConnection):
         listing = self.listing(tile=tile, start_UTC=date_UTC, end_UTC=date_UTC)
         granule = listing.iloc[-1].landsat
 
-        if isinstance(granule, float) and isnan(granule):
+        if isinstance(granule, float) and np.isnan(granule):
             self.mark_date_unavailable("Landsat", tile, date_UTC)
             error_string = f"Landsat is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}"
             most_recent_listing = listing[listing.landsat.apply(
-                lambda landsat: not (landsat == "missing" or (isinstance(granule, float) and isnan(granule))))]
+                lambda landsat: not (landsat == "missing" or (isinstance(granule, float) and np.isnan(granule))))]
 
             if len(most_recent_listing) > 0:
                 most_recent = most_recent_listing.iloc[-1].landsat
