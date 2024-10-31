@@ -11,3 +11,5 @@ __version__ = version
 __author__ = "Gregory H. Halverson, Evan Davis"
 
 logger = logging.getLogger(__name__)
+
+HLS2Connection = HLS2CMRConnection
