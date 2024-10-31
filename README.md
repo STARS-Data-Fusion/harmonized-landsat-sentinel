@@ -8,6 +8,14 @@ NASA Jet Propulsion Laboratory 329G
 [evan.w.davis@jpl.nasa.gov](mailto:evan.w.davis@jpl.nasa.gov)<br>
 NASA Jet Propulsion Laboratory 397K
 
+## Installation
+
+This package is available on PyPi: [https://pypi.org/project/harmonized-landsat-sentinel](https://pypi.org/project/harmonized-landsat-sentinel/1.0.0/)
+
+```
+pip install harmozined-landsat-sentinel
+```
+
 ## References
 
 If you use this package to access or analyze the Harmonized Landsat Sentinel (HLS) dataset, please cite the following datasets and research articles:

@@ -3,8 +3,8 @@ requires = ["setuptools>=60", "setuptools-scm>=8.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "HLS"
-version = "1.0.0"
+name = "harmonized_landsat_sentinel"
+version = "1.0.1"
 description = "Harmonized Landsat Sentinel (HLS) search and download utility"
 readme = "README.md"
 authors = [
