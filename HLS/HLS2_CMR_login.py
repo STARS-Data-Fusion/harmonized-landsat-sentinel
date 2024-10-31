@@ -5,6 +5,7 @@ import earthaccess
 
 from .exceptions import *
 
+_AUTH = None
 
 def HLS2_CMR_login() -> earthaccess.Auth:
     """
@@ -20,12 +21,12 @@ def HLS2_CMR_login() -> earthaccess.Auth:
         secrets = netrc.netrc()
         auth = secrets.authenticators("urs.earthdata.nasa.gov")
         if auth:
-            _AUTH = earthaccess.HLS2_CMR_login(strategy="netrc")  # Use strategy="netrc"
+            _AUTH = earthaccess.login(strategy="netrc")  # Use strategy="netrc"
             return _AUTH
 
         # Fallback to environment variables if netrc fails
         if "EARTHDATA_USERNAME" in os.environ and "EARTHDATA_PASSWORD" in os.environ:
-            _AUTH = earthaccess.HLS2_CMR_login(strategy="environment")
+            _AUTH = earthaccess.login(strategy="environment")
             return _AUTH
         else:
             raise CMRServerUnreachable("Missing netrc credentials or environment variables 'EARTHDATA_USERNAME' and 'EARTHDATA_PASSWORD'")
