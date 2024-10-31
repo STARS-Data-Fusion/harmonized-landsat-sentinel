@@ -15,17 +15,18 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "beautifulsoup4",
+    "colored-logging",
+    "earthaccess",
+    "matplotlib",
     "numpy",
     "pandas",
+    "pytest",
+    "python-dateutil",
     "rasterio",
-    "requests",
-    "beautifulsoup4",
-    "dateutil",
-    "matplotlib",
-    "colored_logging",
     "rasters",
-    "sentinel_tile_grid",
-    "earthaccess",
+    "requests",
+    "sentinel-tiles",
     "shapely"
 ]
 requires-python = ">=3.11"
