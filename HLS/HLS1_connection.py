@@ -1,147 +1,37 @@
-import logging
 import os
-import posixpath
-from abc import abstractmethod
-from datetime import datetime, date, timedelta
 from glob import glob
-from os import makedirs, system
-from os.path import exists, dirname, abspath, join, getsize, basename
 from shutil import move
-from typing import List, Union
+from typing import Union
+
+from os.path import exists, getsize, dirname, join
+import posixpath
+import logging
+from datetime import date, datetime, timedelta
+from dateutil import parser
 
 import numpy as np
 import pandas as pd
-import rasterio
-from dateutil import parser
+import rasters as rt
+from rasters import Raster
 
 import colored_logging as cl
-import rasters as rt
-from rasters import Raster, MultiRaster
 
-from .daterange import date_range
+from .constants import *
+from .exceptions import *
 from .timer import Timer
-from .HLS import *
-
-with open(join(abspath(dirname(__file__)), "version.txt")) as f:
-    version = f.read()
-
-__version__ = version
-__author__ = "Gregory H. Halverson, Evan Davis"
-
-DEFAULT_REMOTE = "https://hls.gsfc.nasa.gov/data/v1.4/"
-DEFAULT_WORKING_DIRECTORY = "."
-DEFAULT_DOWNLOAD_DIRECTORY = "HLS1_download"
-DEFAULT_PRODUCTS_DIRECTORY = "HLS1_products"
-DEFAULT_TARGET_RESOLUTION = 30
+from .daterange import date_range
+from .HLS1_landsat_granule import HLS1LandsatGranule
+from .HLS1_sentinel_granule import HLS1SentinelGranule
+from .HLS_connection import HLSConnection
 
 logger = logging.getLogger(__name__)
 
-
-class HLS1Granule(HLSGranule):
-    def __init__(self, filename: str):
-        super(HLS1Granule, self).__init__(filename)
-        self.directory = filename
-        self.ID = HLSGranuleID(basename(filename))
-
-    def __repr__(self) -> str:
-        return f"HLSGranule({self.filename})"
-
-    def _repr_png_(self) -> bytes:
-        return self.RGB._repr_png_()
-
-    @property
-    def subdatasets(self) -> List[str]:
-        with rasterio.open(self.filename) as file:
-            return sorted(list(file.subdatasets))
-
-    def URI(self, band: str) -> str:
-        return f'HDF4_EOS:EOS_GRID:"{self.filename}":Grid:{band}'
-
-    def DN(self, band: str) -> Raster:
-        if band in self.band_images:
-            return self.band_images[band]
-
-        image = Raster.open(self.URI(band))
-        self.band_images[band] = image
-
-        return image
-
-    @property
-    def QA(self) -> Raster:
-        return self.DN("QA")
-
-    @property
-    def geometry(self):
-        return self.QA.geometry
-
-    @property
-    def cloud(self) -> Raster:
-        return (self.QA >> 1) & 1 == 1
-
-    def band(self, band: str, apply_scale: bool = True, apply_cloud: bool = True) -> Raster:
-        image = self.DN(band)
-
-        if apply_scale:
-            image = rt.where(image == -1000, np.nan, image * 0.0001)
-            image = rt.where(image < 0, np.nan, image)
-
-        if apply_cloud:
-            image = rt.where(self.cloud, np.nan, image)
-
-        return image
-
-    @property
-    @abstractmethod
-    def red(self) -> Raster:
-        pass
-
-    @property
-    @abstractmethod
-    def green(self) -> Raster:
-        pass
-
-    @property
-    @abstractmethod
-    def blue(self) -> Raster:
-        pass
-
-    @property
-    @abstractmethod
-    def NIR(self) -> Raster:
-        pass
-
-    @property
-    def RGB(self) -> MultiRaster:
-        return MultiRaster.stack([self.red, self.green, self.blue])
-
-    @property
-    def NDVI(self) -> Raster:
-        return (self.NIR - self.red) / (self.NIR + self.red)
-
-    @property
-    @abstractmethod
-    def albedo(self) -> Raster:
-        pass
-
-
-class HLS1SentinelGranule(HLS1Granule, HLSSentinelGranule):
-    pass
-
-
-class HLS1LandsatGranule(HLS1Granule, HLSLandsatGranule):
-    def band_name(self, band: Union[str, int]) -> str:
-        if isinstance(band, int):
-            band = f"band{band:02d}"
-
-        return band
-
-
-class HLS1(HLS):
+class HLS1Connection(HLSConnection):
     logger = logging.getLogger(__name__)
-    DEFAULT_REMOTE = DEFAULT_REMOTE
+    DEFAULT_REMOTE = DEFAULT_HLS1_REMOTE
     DEFAULT_WORKING_DIRECTORY = DEFAULT_WORKING_DIRECTORY
-    DEFAULT_DOWNLOAD_DIRECTORY = DEFAULT_DOWNLOAD_DIRECTORY
-    DEFAULT_PRODUCTS_DIRECTORY = DEFAULT_PRODUCTS_DIRECTORY
+    DEFAULT_HLS1_DOWNLOAD_DIRECTORY = DEFAULT_HLS1_DOWNLOAD_DIRECTORY
+    DEFAULT_HLS1_PRODUCTS_DIRECTORY = DEFAULT_HLS1_PRODUCTS_DIRECTORY
     DEFAULT_TARGET_RESOLUTION = DEFAULT_TARGET_RESOLUTION
 
     def __init__(
@@ -154,7 +44,7 @@ class HLS1(HLS):
         if target_resolution is None:
             target_resolution = self.DEFAULT_TARGET_RESOLUTION
 
-        super(HLS1, self).__init__(
+        super(HLS1Connection, self).__init__(
             working_directory=working_directory,
             download_directory=download_directory,
             products_directory=products_directory,
@@ -357,11 +247,11 @@ class HLS1(HLS):
 
         self.logger.info(f"downloading: {cl.URL(URL)} -> {cl.file(filename)}")
         directory = dirname(filename)
-        makedirs(directory, exist_ok=True)
+        os.makedirs(directory, exist_ok=True)
         partial_filename = f"{filename}.download"
         command = f'wget -c -O "{partial_filename}" "{URL}"'
         timer = Timer()
-        system(command)
+        os.system(command)
         self.logger.info(f"completed download in {cl.time(timer)} seconds: " + cl.file(filename))
 
         if not exists(partial_filename):

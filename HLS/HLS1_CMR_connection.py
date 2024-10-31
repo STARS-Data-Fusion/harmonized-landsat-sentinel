@@ -1,229 +1,42 @@
-import os
-import netrc
-import base64
-import json
-import logging
-from datetime import date, timedelta, time, datetime
-from glob import glob
-from os import makedirs, system
-from os.path import exists, dirname, abspath, join, getsize, isdir, basename, expanduser
-from shutil import move
-from time import sleep
-from math import isnan
-from traceback import format_exception
-from typing import List, Union, Set
+from typing import Union, List
 
-import numpy as np
-import pandas as pd
+from os.path import exists
+
+from datetime import time, timedelta
+from math import isnan
+from os.path import abspath, join, expanduser
+from time import sleep
+from traceback import format_exception
+from typing import Set
+import logging
+from datetime import date, datetime
 from dateutil import parser
-from shapely.geometry import Polygon, Point, mapping, shape
+
+import pandas as pd
+
 import earthaccess
 
 import colored_logging as cl
 
+import numpy as np
+
 import rasters as rt
 from rasters import Raster
 
+from .HLS2_landsat_granule import HLS2LandsatGranule
+from .HLS2_sentinel_granule import HLS2SentinelGranule
+from .HLS_CMR_query import HLS_CMR_query
+from .constants import *
 from .daterange import date_range
+from .exceptions import *
+from .HLS2_CMR_login import HLS2_CMR_login
+from .HLS_connection import HLSConnection
+from .get_CMR_granule_ID import get_CMR_granule_ID
 from .timer import Timer
-from .HLS import *
-
-with open(join(abspath(dirname(__file__)), "version.txt")) as f:
-    version = f.read()
-
-__version__ = version
-__author__ = "Gregory H. Halverson, Evan Davis"
-
-CMR_STAC_URL = "https://cmr.earthdata.nasa.gov/stac/LPCLOUD"
-WORKING_DIRECTORY = "."
-DOWNLOAD_DIRECTORY = "HLS2_download"
-PRODUCTS_DIRECTORY = "HLS2_products"
-TARGET_RESOLUTION = 30
-COLLECTIONS = ["HLSS30.v2.0", "HLSL30.v2.0"]
-DEFAULT_RETRIES = 3
-DEFAULT_WAIT_SECONDS = 20
-DEFAULT_DOWNLOAD_RETRIES = 3
-DEFAULT_DOWNLOAD_WAIT_SECONDS = 60
-CONNECTION_CLOSE = {
-    "Connection": "close",
-}
-
-L30_CONCEPT = "C2021957657-LPCLOUD"
-S30_CONCEPT = "C2021957295-LPCLOUD"
-PAGE_SIZE = 2000
-CMR_SEARCH_URL = "https://cmr.earthdata.nasa.gov/search"
-CMR_GRANULES_JSON_URL = f"{CMR_SEARCH_URL}/granules.json"
 
 logger = logging.getLogger(__name__)
 
-class CMRServerUnreachable(Exception):
-    pass
-
-_AUTH = None
-
-def login() -> earthaccess.Auth:
-    """
-    Login to Earthdata using netrc credentials if available, falling back to environment variables.
-    """
-    # Only login to earthaccess once
-    global _AUTH
-    if _AUTH is not None:
-        return _AUTH
-
-    try:
-        # Attempt to use netrc for credentials
-        secrets = netrc.netrc()
-        auth = secrets.authenticators("urs.earthdata.nasa.gov")
-        if auth:
-            _AUTH = earthaccess.login(strategy="netrc")  # Use strategy="netrc"
-            return _AUTH
-
-        # Fallback to environment variables if netrc fails
-        if "EARTHDATA_USERNAME" in os.environ and "EARTHDATA_PASSWORD" in os.environ:
-            _AUTH = earthaccess.login(strategy="environment")
-            return _AUTH
-        else:
-            raise CMRServerUnreachable("Missing netrc credentials or environment variables 'EARTHDATA_USERNAME' and 'EARTHDATA_PASSWORD'")
-
-    except Exception as e:
-        raise CMRServerUnreachable(e)
-
-class HLSBandNotAcquired(IOError):
-    pass
-
-class HLS2Granule(HLSGranule):
-    def __init__(self, directory: str, connection=None):
-        super(HLS2Granule, self).__init__(directory)
-        self.directory = directory
-        self.ID = HLSGranuleID(basename(directory))
-        self.connection = connection
-
-    def __repr__(self) -> str:
-        return f"HLS2Granule({self.directory})"
-
-    @property
-    def filenames(self) -> List[str]:
-        return sorted(glob(join(self.directory, f"*.*")))
-
-    def band_filename(self, band: str) -> str:
-        band = self.band_name(band)
-        pattern = join(self.directory, f"*.{band}.tif")
-        filenames = sorted(glob(pattern))
-
-        if len(filenames) == 0:
-            raise HLSBandNotAcquired(f"no file found for band {band} for granule {self.ID}")
-
-        return filenames[-1]
-
-    def DN(self, band: str) -> Raster:
-        if band in self.band_images:
-            return self.band_images[band]
-
-        filename = self.band_filename(band)
-        image = Raster.open(filename)
-        self.band_images[band] = image
-
-        return image
-
-    @property
-    def Fmask(self) -> Raster:
-        return self.DN("Fmask")
-
-    @property
-    def QA(self) -> Raster:
-        return self.Fmask
-
-    @property
-    def geometry(self):
-        return self.QA.geometry
-
-    @property
-    def cloud(self) -> Raster:
-        return (self.QA & 15 > 0).color(CLOUD_CMAP)
-
-    @property
-    def water(self) -> Raster:
-        return ((self.QA >> 5) & 1 == 1).color(WATER_CMAP)
-
-    def band(self, band: str, apply_scale: bool = True, apply_cloud: bool = True) -> Raster:
-        image = self.DN(band)
-
-        if apply_scale:
-            image = rt.where(image == -1000, np.nan, image * 0.0001)
-            image = rt.where(image < 0, np.nan, image)
-            image.nodata = np.nan
-
-        if apply_cloud:
-            image = rt.where(self.cloud, np.nan, image)
-
-        return image
-
-
-class HLS2SentinelGranule(HLS2Granule, HLSSentinelGranule):
-    pass
-
-
-class HLS2LandsatGranule(HLS2Granule, HLSLandsatGranule):
-    pass
-
-
-def earliest_datetime(date_in: Union[date, str]) -> datetime:
-    if isinstance(date_in, str):
-        datetime_in = parser.parse(date_in)
-    else:
-        datetime_in = date_in
-
-    date_string = datetime_in.strftime("%Y-%m-%d")
-    return parser.parse(f"{date_string}T00:00:00Z")
-
-
-def latest_datetime(date_in: Union[date, str]) -> datetime:
-    if isinstance(date_in, str):
-        datetime_in = parser.parse(date_in)
-    else:
-        datetime_in = date_in
-
-    date_string = datetime_in.strftime("%Y-%m-%d")
-    return parser.parse(f"{date_string}T23:59:59Z")
-
-
-def granule_id(granule: earthaccess.search.DataGranule):
-    return granule["meta"]["native-id"]
-
-
-def HLS_CMR_query(
-        tile: str,
-        start_date: Union[date, str],
-        end_date: Union[date, str],
-        page_size: int = PAGE_SIZE) -> pd.DataFrame:
-    """function to search for HLS at tile in date range"""
-    granules: List[earthaccess.search.DataGranule]
-    try:
-        granules = earthaccess.granule_query() \
-            .concept_id([L30_CONCEPT, S30_CONCEPT]) \
-            .temporal(earliest_datetime(start_date), latest_datetime(end_date)) \
-            .readable_granule_name(f"*.T{tile}.*") \
-            .get()
-    except Exception as e:
-        raise ecostress_cmr.CMRServerUnreachable(e)
-
-    granules = sorted(granules, key=lambda granule: granule["umm"]["TemporalExtent"]["RangeDateTime"]["BeginningDateTime"])
-    data = list(map(
-        lambda granule: {
-            "ID": granule_id(granule),
-            "sensor": granule_id(granule).split(".")[1],
-            "tile": granule_id(granule).split(".")[2][1:],
-            "date_UTC": parser.parse(granule["umm"]["TemporalExtent"]["RangeDateTime"]["BeginningDateTime"]).date().strftime("%Y-%m-%d"),
-            "timestamp_str": granule["umm"]["TemporalExtent"]["RangeDateTime"]["BeginningDateTime"],
-            "granule": granule,
-        },
-        granules
-    ))
-
-    return pd.DataFrame(data, columns=["ID", "sensor", "tile", "date_UTC", "timestamp_str", "granule"])
-
-
-class HLS2CMR(HLS):
+class HLS1CMRConnection(HLSConnection):
     URL = CMR_SEARCH_URL
 
     def __init__(
@@ -253,9 +66,9 @@ class HLS2CMR(HLS):
 
         logger.info(f"HLS 2.0 products directory: {cl.dir(products_directory)}")
 
-        self.auth = login()
+        self.auth = HLS2_CMR_login()
 
-        super(HLS2CMR, self).__init__(
+        super(HLS1CMRConnection, self).__init__(
             working_directory=working_directory,
             download_directory=download_directory,
             products_directory=products_directory,
@@ -278,7 +91,7 @@ class HLS2CMR(HLS):
 
     def sentinel_directory(self, granule: earthaccess.search.DataGranule, date_UTC: Union[date, str]) -> str:
         date_directory = self.date_directory(date_UTC=date_UTC)
-        granule_directory = join(date_directory, granule_id(granule))
+        granule_directory = join(date_directory, get_CMR_granule_ID(granule))
 
         return granule_directory
 
@@ -287,7 +100,7 @@ class HLS2CMR(HLS):
             raise HLSLandsatNotAvailable(f"Landsat is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}")
 
         date_directory = self.date_directory(date_UTC=date_UTC)
-        granule_directory = join(date_directory, granule_id(granule))
+        granule_directory = join(date_directory, get_CMR_granule_ID(granule))
 
         return granule_directory
 
@@ -629,7 +442,7 @@ class HLS2CMR(HLS):
 
         sentinel_dates = set(sentinel_granules.date_UTC)
         landsat_dates = set(landsat_granules.date_UTC)
-        
+
         dates = pd.DataFrame({
             "date_UTC": [
                 (start_UTC + timedelta(days=day_offset)).strftime("%Y-%m-%d")
