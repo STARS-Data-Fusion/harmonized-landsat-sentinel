@@ -1,9 +1,9 @@
+import os
+import netrc
 import base64
 import json
 import logging
-import os
-from datetime import date, timedelta, time
-from datetime import datetime
+from datetime import date, timedelta, time, datetime
 from glob import glob
 from os import makedirs, system
 from os.path import exists, dirname, abspath, join, getsize, isdir, basename, expanduser
@@ -56,10 +56,40 @@ CMR_GRANULES_JSON_URL = f"{CMR_SEARCH_URL}/granules.json"
 
 logger = logging.getLogger(__name__)
 
+class CMRServerUnreachable(Exception):
+    pass
+
+_AUTH = None
+
+def login() -> earthaccess.Auth:
+    """
+    Login to Earthdata using netrc credentials if available, falling back to environment variables.
+    """
+    # Only login to earthaccess once
+    global _AUTH
+    if _AUTH is not None:
+        return _AUTH
+
+    try:
+        # Attempt to use netrc for credentials
+        secrets = netrc.netrc()
+        auth = secrets.authenticators("urs.earthdata.nasa.gov")
+        if auth:
+            _AUTH = earthaccess.login(strategy="netrc")  # Use strategy="netrc"
+            return _AUTH
+
+        # Fallback to environment variables if netrc fails
+        if "EARTHDATA_USERNAME" in os.environ and "EARTHDATA_PASSWORD" in os.environ:
+            _AUTH = earthaccess.login(strategy="environment")
+            return _AUTH
+        else:
+            raise CMRServerUnreachable("Missing netrc credentials or environment variables 'EARTHDATA_USERNAME' and 'EARTHDATA_PASSWORD'")
+
+    except Exception as e:
+        raise CMRServerUnreachable(e)
 
 class HLSBandNotAcquired(IOError):
     pass
-
 
 class HLS2Granule(HLSGranule):
     def __init__(self, directory: str, connection=None):
@@ -223,7 +253,7 @@ class HLS2CMR(HLS):
 
         logger.info(f"HLS 2.0 products directory: {cl.dir(products_directory)}")
 
-        self.auth = ecostress_cmr.login()
+        self.auth = login()
 
         super(HLS2CMR, self).__init__(
             working_directory=working_directory,

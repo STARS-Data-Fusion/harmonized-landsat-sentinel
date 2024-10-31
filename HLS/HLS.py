@@ -24,7 +24,7 @@ import colored_logging as cl
 import rasters as rt
 from rasters import Raster, MultiRaster, SpatialGeometry, RasterGeometry
 
-from sentinel_tile_grid import SentinelTileGrid
+from sentinel_tiles import SentinelTileGrid
 
 from .daterange import date_range
 from .timer import Timer
