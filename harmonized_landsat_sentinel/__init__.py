@@ -1,1 +1,1 @@
-from .HLS import *
+from .harmonized_landsat_sentinel import *
