@@ -31,6 +31,7 @@ with open(join(abspath(dirname(__file__)), "version.txt")) as f:
 __version__ = version
 __author__ = "Gregory H. Halverson, Evan Davis"
 
-logger = logging.getLogger(__name__)
 
+HLS = HLSConnection
 HLS2Connection = HLS2CMRConnection
+HLS2CMR = HLS2CMRConnection
