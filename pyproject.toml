@@ -3,8 +3,8 @@ requires = ["setuptools>=60", "setuptools-scm>=8.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "harmonized_landsat_sentinel"
-version = "1.1.1"
+name = "harmonized-landsat-sentinel"
+version = "1.1.2"
 description = "Harmonized Landsat Sentinel (HLS) search and download utility"
 readme = "README.md"
 authors = [
@@ -29,16 +29,20 @@ dependencies = [
     "sentinel-tiles",
     "shapely"
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 
 [project.optional-dependencies]
 dev = [
+    "build",
     "pytest>=6.0",
-    "pytest-cov",  # For test coverage reports (optional)
+    "pytest-cov",
+    "jupyter",
+    "pytest",
+    "twine"
 ]
 
 [tool.setuptools.package-data]
-HLS = ["*.txt"]
+harmonized_landsat_sentinel = ["*.txt"]
 
 [project.urls]
-"Homepage" = "https://github.com/STARS-Data-Fusion/HLS"
+"Homepage" = "https://github.com/STARS-Data-Fusion/harmonized-landsat-sentinel"
