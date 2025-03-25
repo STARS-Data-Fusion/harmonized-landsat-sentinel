@@ -18,20 +18,25 @@ import numpy as np
 import rasters as rt
 from rasters import Raster
 
+from .HLS2_earthaccess_login import HLS2_earthaccess_login
+
 from .constants import *
 from .exceptions import *
-from .HLS2_CMR_login import HLS2_CMR_login
 from .HLS_connection import HLSConnection
-from .get_CMR_granule_ID import get_CMR_granule_ID
+from .HLS_CMR_query import HLS_CMR_query
 from .HLS2_sentinel_granule import HLS2SentinelGranule
 from .HLS2_landsat_granule import HLS2LandsatGranule
-from .HLS_CMR_query import HLS_CMR_query
 from .timer import Timer
 from .daterange import date_range
 
+__author__ = "Gregory H. Halverson, Evan Davis"
+
 logger = logging.getLogger(__name__)
 
-class HLS2CMRConnection(HLSConnection):
+def granule_id(granule: earthaccess.search.DataGranule):
+    return granule["meta"]["native-id"]
+
+class HLS2EarthAccessConnection(HLSConnection):
     URL = CMR_SEARCH_URL
 
     def __init__(
@@ -40,6 +45,8 @@ class HLS2CMRConnection(HLSConnection):
             download_directory: str = None,
             products_directory: str = None,
             target_resolution: int = None,
+            username: str = None,
+            password: str = None,
             retries: int = DEFAULT_RETRIES,
             wait_seconds: float = DEFAULT_WAIT_SECONDS):
         if target_resolution is None:
@@ -61,13 +68,13 @@ class HLS2CMRConnection(HLSConnection):
 
         logger.info(f"HLS 2.0 products directory: {cl.dir(products_directory)}")
 
-        self.auth = HLS2_CMR_login()
+        self.auth = HLS2_earthaccess_login()
 
-        super(HLS2CMRConnection, self).__init__(
+        super(HLS2EarthAccessConnection, self).__init__(
             working_directory=working_directory,
             download_directory=download_directory,
             products_directory=products_directory,
-            target_resolution=target_resolution
+            target_resolution=target_resolution,
         )
 
         self.retries = retries
@@ -86,7 +93,7 @@ class HLS2CMRConnection(HLSConnection):
 
     def sentinel_directory(self, granule: earthaccess.search.DataGranule, date_UTC: Union[date, str]) -> str:
         date_directory = self.date_directory(date_UTC=date_UTC)
-        granule_directory = join(date_directory, get_CMR_granule_ID(granule))
+        granule_directory = join(date_directory, granule_id(granule))
 
         return granule_directory
 
@@ -95,7 +102,7 @@ class HLS2CMRConnection(HLSConnection):
             raise HLSLandsatNotAvailable(f"Landsat is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}")
 
         date_directory = self.date_directory(date_UTC=date_UTC)
-        granule_directory = join(date_directory, get_CMR_granule_ID(granule))
+        granule_directory = join(date_directory, granule_id(granule))
 
         return granule_directory
 
@@ -384,8 +391,7 @@ class HLS2CMRConnection(HLSConnection):
         return granules
 
     def dates_listed(self, tile: str) -> Set[date]:
-        return set(
-            self._listing[self._listing.tile == tile].date_UTC.apply(lambda date_UTC: parser.parse(date_UTC).date()))
+        return set(self._listing[self._listing.tile == tile].date_UTC.apply(lambda date_UTC: parser.parse(date_UTC).date()))
 
     def listing(
             self,
@@ -412,9 +418,7 @@ class HLS2CMRConnection(HLSConnection):
 
         if set(date_range(start_UTC, end_UTC)) <= self.dates_listed(tile):
             listing_subset = self._listing[self._listing.tile == tile]
-            listing_subset = listing_subset[listing_subset.date_UTC.apply(
-                lambda date_UTC: parser.parse(str(date_UTC)).date() >= start_UTC and parser.parse(
-                    str(date_UTC)).date() <= end_UTC)]
+            listing_subset = listing_subset[listing_subset.date_UTC.apply(lambda date_UTC: parser.parse(str(date_UTC)).date() >= start_UTC and parser.parse(str(date_UTC)).date() <= end_UTC)]
             listing_subset = listing_subset.sort_values(by="date_UTC")
 
             return listing_subset
@@ -440,7 +444,7 @@ class HLS2CMRConnection(HLSConnection):
 
         sentinel_dates = set(sentinel_granules.date_UTC)
         landsat_dates = set(landsat_granules.date_UTC)
-
+        
         dates = pd.DataFrame({
             "date_UTC": [
                 (start_UTC + timedelta(days=day_offset)).strftime("%Y-%m-%d")
@@ -490,8 +494,7 @@ class HLS2CMRConnection(HLSConnection):
                 landsat_dates_expected.add(d)
 
         # listing["landsat_expected"] = listing.apply(lambda row: parser.parse(str(row.date_UTC)).date().strftime("%Y-%m-%d") in landsat_dates_expected, axis=1)
-        listing["landsat_expected"] = listing.date_UTC.apply(
-            lambda date_UTC: parser.parse(str(date_UTC)).date().strftime("%Y-%m-%d") in landsat_dates_expected)
+        listing["landsat_expected"] = listing.date_UTC.apply(lambda date_UTC: parser.parse(str(date_UTC)).date().strftime("%Y-%m-%d") in landsat_dates_expected)
 
         listing["landsat_missing"] = listing.apply(
             lambda row: not row.landsat_available and row.landsat_expected and parser.parse(
@@ -535,8 +538,7 @@ class HLS2CMRConnection(HLSConnection):
         if isinstance(granule, float) and np.isnan(granule):
             self.mark_date_unavailable("Landsat", tile, date_UTC)
             error_string = f"Landsat is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}"
-            most_recent_listing = listing[listing.landsat.apply(
-                lambda landsat: not (landsat == "missing" or (isinstance(granule, float) and np.isnan(granule))))]
+            most_recent_listing = listing[listing.landsat.apply(lambda landsat: not (landsat == "missing" or (isinstance(granule, float) and np.isnan(granule))))]
 
             if len(most_recent_listing) > 0:
                 most_recent = most_recent_listing.iloc[-1].landsat

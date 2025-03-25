@@ -22,6 +22,7 @@ from .HLS2_CMR_login import *
 from .HLS2_granule import *
 from .HLS2_landsat_granule import *
 from .HLS2_sentinel_granule import *
+from .HLS2_earthaccess_connection import *
 from .latest_datetime import *
 from .timer import *
 
@@ -33,5 +34,7 @@ __author__ = "Gregory H. Halverson, Evan Davis"
 
 
 HLS = HLSConnection
-HLS2Connection = HLS2CMRConnection
+HLS2Connection = HLS2EarthAccessConnection
 HLS2CMR = HLS2CMRConnection
+
+harmonized_landsat_sentinel = HLS2EarthAccessConnection()
