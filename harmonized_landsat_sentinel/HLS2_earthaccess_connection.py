@@ -163,12 +163,14 @@ class HLS2EarthAccessConnection(HLSConnection):
         elif sentinel is not None and landsat is None:
             try:
                 NDVI = sentinel.NDVI
-            except HLSBandNotAcquired:
+            except HLSBandNotAcquired as e:
+                logger.error(e)
                 raise HLSNotAvailable(f"HLS2 S30 is not available at {tile} on {date_UTC}")
         elif sentinel is None and landsat is not None:
             try:
                 NDVI = landsat.NDVI
-            except HLSBandNotAcquired:
+            except HLSBandNotAcquired as e:
+                logger.error(e)
                 raise HLSNotAvailable(f"HLS2 L30 is not available at {tile} on {date_UTC}")
         else:
             NDVI = rt.Raster(np.nanmean(np.dstack([sentinel.NDVI, landsat.NDVI]), axis=2), geometry=sentinel.geometry)
