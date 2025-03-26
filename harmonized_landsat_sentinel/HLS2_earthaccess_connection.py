@@ -41,9 +41,8 @@ class HLS2EarthAccessConnection(HLSConnection):
 
     def __init__(
             self,
-            working_directory: str = None,
-            download_directory: str = None,
-            products_directory: str = None,
+            working_directory: str = HLS2_DOWNLOAD_DIRECTORY,
+            download_directory: str = HLS2_DOWNLOAD_DIRECTORY,
             target_resolution: int = None,
             username: str = None,
             password: str = None,
@@ -55,25 +54,16 @@ class HLS2EarthAccessConnection(HLSConnection):
         if working_directory is None:
             working_directory = abspath(".")
 
-        working_directory = expanduser(working_directory)
+        # working_directory = expanduser(working_directory)
         logger.info(f"HLS 2.0 working directory: {cl.dir(working_directory)}")
-
-        if download_directory is None:
-            download_directory = join(working_directory, DOWNLOAD_DIRECTORY)
-
         logger.info(f"HLS 2.0 download directory: {cl.dir(download_directory)}")
 
-        if products_directory is None:
-            products_directory = join(working_directory, PRODUCTS_DIRECTORY)
-
-        logger.info(f"HLS 2.0 products directory: {cl.dir(products_directory)}")
-
-        self.auth = HLS2_earthaccess_login()
+        # self.auth = HLS2_earthaccess_login()
+        self.auth = earthaccess.login()
 
         super(HLS2EarthAccessConnection, self).__init__(
             working_directory=working_directory,
             download_directory=download_directory,
-            products_directory=products_directory,
             target_resolution=target_resolution,
         )
 
@@ -117,7 +107,7 @@ class HLS2EarthAccessConnection(HLSConnection):
 
         # TODO: login dude
         logger.info(f"retrieving Sentinel tile {cl.name(tile)} on {cl.time(date_UTC)}: {directory}")
-        file_paths = earthaccess.download(granule, directory)
+        file_paths = earthaccess.download(granule, abspath(expanduser(directory)))
         for download_file_path in file_paths:
             if isinstance(download_file_path, Exception):
                 raise HLSDownloadFailed("Error when downloading HLS2 files") from download_file_path
@@ -136,7 +126,7 @@ class HLS2EarthAccessConnection(HLSConnection):
         directory = self.landsat_directory(granule, tile=tile, date_UTC=date_UTC)
 
         logger.info(f"retrieving Landsat tile {cl.name(tile)} on {cl.time(date_UTC)}: {directory}")
-        file_paths = earthaccess.download(granule, directory)
+        file_paths = earthaccess.download(granule, abspath(expanduser(directory)))
         for download_file_path in file_paths:
             if isinstance(download_file_path, Exception):
                 raise HLSDownloadFailed("Error when downloading HLS2 files") from download_file_path
@@ -148,33 +138,11 @@ class HLS2EarthAccessConnection(HLSConnection):
     def NDVI(
             self,
             tile: str,
-            date_UTC: Union[date, str],
-            product_filename: str = None,
-            preview_filename: str = None,
-            save_data: bool = False,
-            save_preview: bool = False,
-            return_filename: bool = False) -> Union[Raster, str]:
+            date_UTC: Union[date, str]) -> Union[Raster, str]:
         target_tile = tile
         target_geometry = self.grid(target_tile)
         tile = tile[:5]
         geometry = self.grid(tile)
-
-        if product_filename is None:
-            product_filename = self.product_filename(
-                product="NDVI",
-                date_UTC=date_UTC,
-                tile=tile
-            )
-
-        if preview_filename is None:
-            preview_filename = product_filename.replace(".tif", ".jpeg")
-
-        if exists(product_filename):
-            if return_filename:
-                return product_filename
-            else:
-                self.logger.info(f"loading HLS2 NDVI: {cl.file(product_filename)}")
-                return Raster.open(product_filename, geometry=target_geometry)
 
         try:
             sentinel = self.sentinel(tile=tile, date_UTC=date_UTC)
@@ -209,68 +177,17 @@ class HLS2EarthAccessConnection(HLSConnection):
             NDVI = NDVI.to_geometry(geometry, resampling="average")
         elif self.target_resolution < 30:
             NDVI = NDVI.to_geometry(geometry, resampling="cubic")
-
-        if (save_data or return_filename) and not exists(product_filename):
-            self.logger.info(f"saving HLS2 NDVI: {cl.file(product_filename)}")
-            NDVI.to_COG(product_filename)
-
-            if save_preview:
-                self.logger.info(f"saving HLS2 NDVI preview: {cl.file(preview_filename)}")
-                NDVI.to_geojpeg(preview_filename)
-
-        NDVI = NDVI.to_geometry(target_geometry)
-
-        if return_filename:
-            return product_filename
-        else:
-            return NDVI
-
-    def product_directory(self, product: str, date_UTC: Union[date, str]):
-        if isinstance(date_UTC, str):
-            date_UTC = parser.parse(date_UTC).date()
-
-        return join(self.products_directory, product, f"{date_UTC:%Y.%m.%d}")
-
-    def product_filename(self, product: str, date_UTC: Union[date, str], tile: str):
-        if isinstance(date_UTC, str):
-            date_UTC = parser.parse(date_UTC).date()
-
-        directory = self.product_directory(product=product, date_UTC=date_UTC)
-        filename = join(directory, f"HLS_{tile}_{date_UTC:%Y%m%d}_{product}.tif")
-
-        return filename
+        
+        return NDVI
 
     def albedo(
             self,
             tile: str,
-            date_UTC: Union[date, str],
-            product_filename: str = None,
-            preview_filename: str = None,
-            save_data: bool = False,
-            save_preview: bool = False,
-            return_filename: bool = False) -> Union[Raster, str]:
-
+            date_UTC: Union[date, str]) -> Union[Raster, str]:
         target_tile = tile
         target_geometry = self.grid(target_tile)
         tile = tile[:5]
         geometry = self.grid(tile)
-
-        if product_filename is None:
-            product_filename = self.product_filename(
-                product="albedo",
-                date_UTC=date_UTC,
-                tile=tile
-            )
-
-        if preview_filename is None:
-            preview_filename = product_filename.replace(".tif", ".jpeg")
-
-        if exists(product_filename):
-            if return_filename:
-                return product_filename
-            else:
-                self.logger.info(f"loading HLS2 albedo: {cl.file(product_filename)}")
-                return Raster.open(product_filename, geometry=target_geometry)
 
         try:
             sentinel = self.sentinel(tile=tile, date_UTC=date_UTC)
@@ -306,20 +223,7 @@ class HLS2EarthAccessConnection(HLSConnection):
             albedo = albedo.to_geometry(geometry, resampling="average")
         elif self.target_resolution < 30:
             albedo = albedo.to_geometry(geometry, resampling="cubic")
-
-        if (save_data and return_filename) and not exists(product_filename):
-            self.logger.info(f"saving HLS2 albedo: {cl.file(product_filename)}")
-            albedo.to_COG(product_filename)
-
-            if save_preview:
-                self.logger.info(f"saving HLS2 albedo preview: {cl.file(preview_filename)}")
-                albedo.to_geojpeg(preview_filename)
-
-        albedo = albedo.to_geometry(target_geometry)
-
-        if return_filename:
-            return product_filename
-
+        
         return albedo
 
     def search(
@@ -423,7 +327,7 @@ class HLS2EarthAccessConnection(HLSConnection):
 
             return listing_subset
 
-        self.logger.info(
+        logger.info(
             f"started listing available HLS2 granules at tile {cl.place(tile)} from {cl.time(start_UTC)} to {cl.time(end_UTC)}")
 
         giveup_date = datetime.utcnow().date() - timedelta(days=GIVEUP_DAYS)
@@ -505,7 +409,7 @@ class HLS2EarthAccessConnection(HLSConnection):
         listing["landsat"] = listing.apply(lambda row: "missing" if row.landsat_missing else row.landsat, axis=1)
         listing = listing[["date_UTC", "tile", "sentinel", "landsat"]]
 
-        self.logger.info(
+        logger.info(
             f"finished listing available HLS2 granules at tile {cl.place(tile)} from {cl.time(start_UTC)} to {cl.time(end_UTC)} ({timer})")
 
         self._listing = pd.concat([self._listing, listing]).drop_duplicates(subset=["date_UTC", "tile"])
