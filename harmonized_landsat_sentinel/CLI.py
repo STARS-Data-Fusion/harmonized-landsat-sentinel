@@ -28,6 +28,9 @@ def main():
     parser.add_argument(
         "--end", type=str, help="End date (YYYY-MM-DD)", default=None
     )
+    parser.add_argument(
+        "-d", "--directory", type=str, help="Directory to use", default=None
+    )
     args = parser.parse_args()
 
     if args.version:
@@ -43,6 +46,8 @@ def main():
         print(f"Start date: {args.start}")
     if args.end:
         print(f"End date: {args.end}")
+    if args.directory:
+        print(f"Directory: {args.directory}")
 
 if __name__ == "__main__":
     main()
