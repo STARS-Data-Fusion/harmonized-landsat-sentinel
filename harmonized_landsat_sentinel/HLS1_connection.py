@@ -27,18 +27,14 @@ from .HLS_connection import HLSConnection
 logger = logging.getLogger(__name__)
 
 class HLS1Connection(HLSConnection):
-    logger = logging.getLogger(__name__)
     DEFAULT_REMOTE = DEFAULT_HLS1_REMOTE
     DEFAULT_WORKING_DIRECTORY = DEFAULT_WORKING_DIRECTORY
-    DEFAULT_HLS1_DOWNLOAD_DIRECTORY = DEFAULT_HLS1_DOWNLOAD_DIRECTORY
-    DEFAULT_HLS1_PRODUCTS_DIRECTORY = DEFAULT_HLS1_PRODUCTS_DIRECTORY
     DEFAULT_TARGET_RESOLUTION = DEFAULT_TARGET_RESOLUTION
 
     def __init__(
             self,
             working_directory: str = None,
             download_directory: str = None,
-            products_directory: str = None,
             target_resolution: int = None,
             remote: str = DEFAULT_REMOTE):
         if target_resolution is None:
@@ -47,7 +43,6 @@ class HLS1Connection(HLSConnection):
         super(HLS1Connection, self).__init__(
             working_directory=working_directory,
             download_directory=download_directory,
-            products_directory=products_directory,
             target_resolution=target_resolution
         )
 
@@ -112,7 +107,7 @@ class HLS1Connection(HLSConnection):
         tile = tile[:5]
 
         timer = Timer()
-        self.logger.info(
+        logger.info(
             f"started listing available HLS2 granules at tile {cl.place(tile)} from {cl.time(start_UTC)} to {cl.time(end_UTC)}")
 
         if isinstance(start_UTC, str):
@@ -178,7 +173,7 @@ class HLS1Connection(HLSConnection):
 
         listing["landsat"] = listing.apply(lambda row: "missing" if row.landsat_missing else row.landsat, axis=1)
         listing = listing[["date_UTC", "tile", "sentinel", "landsat"]]
-        self.logger.info(
+        logger.info(
             f"finished listing available HLS2 granules at tile {cl.place(tile)} from {cl.time(start_UTC)} to {cl.time(end_UTC)} ({timer})")
 
         return listing
@@ -191,11 +186,11 @@ class HLS1Connection(HLSConnection):
         filename = str(listing.iloc[-1].sentinel)
 
         if filename == "nan":
-            # self.logger.error(listing[["date_UTC", "sentinel"]])
+            # logger.error(listing[["date_UTC", "sentinel"]])
             self.mark_date_unavailable("Sentinel", tile, date_UTC)
             raise HLSSentinelNotAvailable(f"Sentinel is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}")
         elif filename == "missing":
-            # self.logger.error(listing[["date_UTC", "sentinel"]])
+            # logger.error(listing[["date_UTC", "sentinel"]])
             raise HLSSentinelMissing(
                 f"Sentinel is missing on remote server at tile {cl.place(tile)} on {cl.time(date_UTC)}")
         else:
@@ -242,17 +237,17 @@ class HLS1Connection(HLSConnection):
             os.remove(filename)
 
         if exists(filename):
-            self.logger.info(f"file already downloaded: {cl.file(filename)}")
+            logger.info(f"file already downloaded: {cl.file(filename)}")
             return filename
 
-        self.logger.info(f"downloading: {cl.URL(URL)} -> {cl.file(filename)}")
+        logger.info(f"downloading: {cl.URL(URL)} -> {cl.file(filename)}")
         directory = dirname(filename)
         os.makedirs(directory, exist_ok=True)
         partial_filename = f"{filename}.download"
         command = f'wget -c -O "{partial_filename}" "{URL}"'
         timer = Timer()
         os.system(command)
-        self.logger.info(f"completed download in {cl.time(timer)} seconds: " + cl.file(filename))
+        logger.info(f"completed download in {cl.time(timer)} seconds: " + cl.file(filename))
 
         if not exists(partial_filename):
             raise HLSDownloadFailed(f"unable to download URL: {URL}")
@@ -381,7 +376,7 @@ class HLS1Connection(HLSConnection):
             if return_filename:
                 return product_filename
             else:
-                self.logger.info(f"loading HLS2 NDVI: {cl.file(product_filename)}")
+                logger.info(f"loading HLS2 NDVI: {cl.file(product_filename)}")
                 return Raster.open(product_filename, geometry=target_geometry)
 
         try:
@@ -413,11 +408,11 @@ class HLS1Connection(HLSConnection):
             NDVI = NDVI.to_geometry(geometry, resampling="cubic")
 
         if (save_data or return_filename) and not exists(product_filename):
-            self.logger.info(f"saving HLS2 NDVI: {cl.file(product_filename)}")
+            logger.info(f"saving HLS2 NDVI: {cl.file(product_filename)}")
             NDVI.to_COG(product_filename)
 
             if save_preview:
-                self.logger.info(f"saving HLS2 NDVI preview: {cl.file(preview_filename)}")
+                logger.info(f"saving HLS2 NDVI preview: {cl.file(preview_filename)}")
                 NDVI.to_geojpeg(preview_filename)
 
         NDVI = NDVI.to_geometry(target_geometry)
@@ -426,21 +421,6 @@ class HLS1Connection(HLSConnection):
             return product_filename
         else:
             return NDVI
-
-    def product_directory(self, product: str, date_UTC: Union[date, str]):
-        if isinstance(date_UTC, str):
-            date_UTC = parser.parse(date_UTC).date()
-
-        return join(self.products_directory, product, f"{date_UTC:%Y.%m.%d}")
-
-    def product_filename(self, product: str, date_UTC: Union[date, str], tile: str):
-        if isinstance(date_UTC, str):
-            date_UTC = parser.parse(date_UTC).date()
-
-        directory = self.product_directory(product=product, date_UTC=date_UTC)
-        filename = join(directory, f"HLS_{tile}_{date_UTC:%Y%m%d}_{product}.tif")
-
-        return filename
 
     def albedo(
             self,
@@ -470,7 +450,7 @@ class HLS1Connection(HLSConnection):
             if return_filename:
                 return product_filename
             else:
-                self.logger.info(f"loading HLS2 albedo: {cl.file(product_filename)}")
+                logger.info(f"loading HLS2 albedo: {cl.file(product_filename)}")
                 return Raster.open(product_filename, geometry=target_geometry)
 
         try:
@@ -503,11 +483,11 @@ class HLS1Connection(HLSConnection):
             albedo = albedo.to_geometry(geometry, resampling="cubic")
 
         if (save_data or return_filename) and not exists(product_filename):
-            self.logger.info(f"saving HLS2 albedo: {cl.file(product_filename)}")
+            logger.info(f"saving HLS2 albedo: {cl.file(product_filename)}")
             albedo.to_COG(product_filename)
 
             if save_preview:
-                self.logger.info(f"saving HLS2 albedo preview: {cl.file(preview_filename)}")
+                logger.info(f"saving HLS2 albedo preview: {cl.file(preview_filename)}")
                 albedo.to_geojpeg(preview_filename)
 
         albedo = albedo.to_geometry(target_geometry)

@@ -1,6 +1,6 @@
 from typing import List
 
-from os.path import basename, join
+from os.path import basename, join, abspath, expanduser
 
 from glob import glob
 
@@ -29,11 +29,11 @@ class HLS2Granule(HLSGranule):
 
     def band_filename(self, band: str) -> str:
         band = self.band_name(band)
-        pattern = join(self.directory, f"*.{band}.tif")
+        pattern = join(abspath(expanduser(self.directory)), f"*.{band}.tif")
         filenames = sorted(glob(pattern))
 
         if len(filenames) == 0:
-            raise HLSBandNotAcquired(f"no file found for band {band} for granule {self.ID}")
+            raise HLSBandNotAcquired(f"no file found for band {band} for granule {self.ID} in directory: {self.directory}")
 
         return filenames[-1]
 
