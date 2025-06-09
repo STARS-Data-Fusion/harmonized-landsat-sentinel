@@ -44,5 +44,8 @@ dev = [
 [tool.setuptools.package-data]
 harmonized_landsat_sentinel = ["*.txt"]
 
+[project.scripts]
+HLS = "harmonized_landsat_sentinel.CLI:main"
+
 [project.urls]
 "Homepage" = "https://github.com/STARS-Data-Fusion/harmonized-landsat-sentinel"
