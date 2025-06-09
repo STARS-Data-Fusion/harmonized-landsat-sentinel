@@ -13,7 +13,7 @@ NASA Jet Propulsion Laboratory 397K
 This package is available on PyPi: [https://pypi.org/project/harmonized-landsat-sentinel](https://pypi.org/project/harmonized-landsat-sentinel/1.0.0/)
 
 ```
-pip install harmozined-landsat-sentinel
+pip install harmonized-landsat-sentinel
 ```
 
 ## References
