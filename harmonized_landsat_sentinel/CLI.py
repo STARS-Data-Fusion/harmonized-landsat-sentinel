@@ -1,53 +1,35 @@
 import sys
 import argparse
-from harmonized_landsat_sentinel import __version__
+from typing import Optional, List
+from harmonized_landsat_sentinel import __version__, timeseries
 
-def print_version_and_exit():
+from .parse_arguments import parse_arguments
+
+def print_version_and_exit() -> None:
     print(f"HLS CLI {__version__}")
     sys.exit(0)
 
-def main():
+def main(argv: Optional[List[str]] = None) -> None:
     """
     Entry point for the HLS command-line interface.
+    Accepts an optional argv list for testing or custom invocation.
     """
-    parser = argparse.ArgumentParser(
-        description="Harmonized Landsat Sentinel (HLS) search and download utility"
-    )
-    parser.add_argument(
-        "--version", action="store_true", help="Show the version and exit"
-    )
-    parser.add_argument(
-        "-b", "--band", type=str, help="Band to use", default=None
-    )
-    parser.add_argument(
-        "-t", "--tile", type=str, help="Tile to use", default=None
-    )
-    parser.add_argument(
-        "--start", type=str, help="Start date (YYYY-MM-DD)", default=None
-    )
-    parser.add_argument(
-        "--end", type=str, help="End date (YYYY-MM-DD)", default=None
-    )
-    parser.add_argument(
-        "-d", "--directory", type=str, help="Directory to use", default=None
-    )
-    args = parser.parse_args()
+    if argv is None:
+        argv = sys.argv[1:]
+
+    args = parse_arguments(argv)
 
     if args.version:
         print_version_and_exit()
 
-    print("Harmonized Landsat Sentinel (HLS) CLI")
-    # print("Arguments:", sys.argv[1:])
-    if args.band:
-        print(f"Band: {args.band}")
-    if args.tile:
-        print(f"Tile: {args.tile}")
-    if args.start:
-        print(f"Start date: {args.start}")
-    if args.end:
-        print(f"End date: {args.end}")
-    if args.directory:
-        print(f"Directory: {args.directory}")
+    # Call the timeseries function with parsed arguments
+    timeseries(
+        band=args.band,
+        tile=args.tile,
+        start_date=args.start,
+        end_date=args.end,
+        download_directory=args.directory
+    )
 
 if __name__ == "__main__":
     main()
