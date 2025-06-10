@@ -25,6 +25,7 @@ from .HLS2_sentinel_granule import *
 from .HLS2_earthaccess_connection import *
 from .latest_datetime import *
 from .timer import *
+from .timeseries import *
 
 with open(join(abspath(dirname(__file__)), "version.txt")) as f:
     version = f.read()
