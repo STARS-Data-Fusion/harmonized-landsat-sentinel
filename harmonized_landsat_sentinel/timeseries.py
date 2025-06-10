@@ -59,3 +59,16 @@ def timeseries(
     for d in dates_available:
         logger.info(f"  * {d}")
     
+    for d in dates_available:
+        logger.info(f"extracting band {band} for date {d}")
+        try:
+            image = HLS.product(
+                product=band,
+                date_UTC=d,
+                tile=tile
+            )
+        except Exception as e:
+            logger.error(e)
+            continue
+
+    
