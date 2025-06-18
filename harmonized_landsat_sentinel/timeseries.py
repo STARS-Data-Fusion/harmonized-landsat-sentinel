@@ -1,12 +1,22 @@
-from typing import Optional, Union
+from typing import Optional, Union, List
+from os.path import join, expanduser
 import logging
 from datetime import date, datetime
-from dateutil import parser as date_parser
+from dateutil import parser
+
+BANDS = [
+    "red",
+    "green",
+    "blue",
+    "NIR",
+    "SWIR1",
+    "SWIR2"
+]
 
 logger = logging.getLogger(__name__)
 
 def timeseries(
-    band: Optional[str] = None,
+    bands: Optional[Union[List[str], str]] = None,
     tile: Optional[str] = None,
     start_date: Optional[Union[str, date]] = None,
     end_date: Optional[Union[str, date]] = None,
@@ -27,12 +37,17 @@ def timeseries(
     """
     # Parse start_date and end_date if they are strings
     if isinstance(start_date, str):
-        start_date = date_parser.parse(start_date).date()
+        start_date = parser.parse(start_date).date()
     if isinstance(end_date, str):
-        end_date = date_parser.parse(end_date).date()
+        end_date = parser.parse(end_date).date()
+
+    if bands is None:
+        bands = BANDS
+    elif isinstance(bands, str):
+        bands = [bands]
 
     logger.info("Generating HLS timeseries with parameters:")
-    logger.info(f"  Band: {band}")
+    logger.info(f"  Bands: {', '.join(bands)}")
     logger.info(f"  Tile: {tile}")
     logger.info(f"  Start date: {start_date}")
     logger.info(f"  End date: {end_date}")
@@ -50,25 +65,39 @@ def timeseries(
         tile=tile,
         start_UTC=start_date,
         end_UTC=end_date
-    )
+    ).dropna(how="all", subset=["sentinel", "landsat"])
 
-    logger.info(f"{len(listing)} dates available:")
+    dates_available = sorted(listing.date_UTC)
 
-    dates_available = sorted(HLS.dates_listed(tile=tile))
+    if len(dates_available) == 0:
+        raise Exception(f"no dates available for tile {tile} in the date range {start_date} to {end_date}")
+
+    logger.info(f"{len(dates_available)} dates available:")
 
     for d in dates_available:
         logger.info(f"  * {d}")
     
     for d in dates_available:
-        logger.info(f"extracting band {band} for date {d}")
-        try:
-            image = HLS.product(
-                product=band,
-                date_UTC=d,
-                tile=tile
-            )
-        except Exception as e:
-            logger.error(e)
-            continue
+        d = parser.parse(d).date()
 
+        for band in bands:
+            logger.info(f"extracting band {bands} for date {d}")
+
+            try:
+                image = HLS.product(
+                    product=band,
+                    date_UTC=d,
+                    tile=tile
+                )
+            except Exception as e:
+                logger.error(e)
+                continue
+            
+            filename = join(
+                download_directory,
+                f"HLS_{band}_{tile}_{d.strftime('%Y%m%d')}.tif"
+            )
+
+            logger.info(f"writing image to {filename}")
+            image.to_geotiff(expanduser(filename))
     

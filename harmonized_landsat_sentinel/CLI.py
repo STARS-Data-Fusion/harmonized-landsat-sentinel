@@ -24,7 +24,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # Call the timeseries function with parsed arguments
     timeseries(
-        band=args.band,
+        bands=args.band,
         tile=args.tile,
         start_date=args.start,
         end_date=args.end,
