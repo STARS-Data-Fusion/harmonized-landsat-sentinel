@@ -4,6 +4,8 @@ import logging
 from datetime import date, datetime
 from dateutil import parser
 
+from rasters import RasterGeometry
+
 BANDS = [
     "red",
     "green",
@@ -18,10 +20,11 @@ logger = logging.getLogger(__name__)
 def timeseries(
     bands: Optional[Union[List[str], str]] = None,
     tile: Optional[str] = None,
+    geometry: Optional[RasterGeometry] = None,
     start_date: Optional[Union[str, date]] = None,
     end_date: Optional[Union[str, date]] = None,
-    download_directory: Optional[str] = None
-) -> None:
+    download_directory: Optional[str] = None,
+    output_directory: Optional[str] = None) -> None:
     """
     Produce a timeseries of HLS data for the specified parameters.
 
@@ -89,12 +92,16 @@ def timeseries(
                     date_UTC=d,
                     tile=tile
                 )
+
+                if geometry is not None:
+                    image = image.to_geometry(geometry)
+
             except Exception as e:
                 logger.error(e)
                 continue
             
             filename = join(
-                download_directory,
+                output_directory,
                 f"HLS_{band}_{tile}_{d.strftime('%Y%m%d')}.tif"
             )
 
