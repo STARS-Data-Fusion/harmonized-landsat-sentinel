@@ -1,3 +1,4 @@
+import logging
 import netrc
 import os
 
@@ -27,6 +28,11 @@ def login() -> earthaccess.Auth:
         _AUTH = MockAuth()
         return _AUTH
 
+    # Temporarily suppress INFO logs from earthaccess during login
+    earthaccess_logger = logging.getLogger('earthaccess')
+    original_level = earthaccess_logger.level
+    earthaccess_logger.setLevel(logging.WARNING)
+
     try:
         # First priority: environment variables
         if "EARTHDATA_USERNAME" in os.environ and "EARTHDATA_PASSWORD" in os.environ:
@@ -50,3 +56,6 @@ def login() -> earthaccess.Auth:
 
     except Exception as e:
         raise CMRServerUnreachable(e)
+    finally:
+        # Restore original logging level
+        earthaccess_logger.setLevel(original_level)

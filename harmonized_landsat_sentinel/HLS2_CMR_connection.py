@@ -48,12 +48,12 @@ class HLS2CMRConnection(HLSConnection):
             working_directory = abspath(".")
 
         working_directory = expanduser(working_directory)
-        logger.info(f"HLS 2.0 working directory: {cl.dir(working_directory)}")
+        logger.debug(f"HLS 2.0 working directory: {cl.dir(working_directory)}")
 
         if download_directory is None:
             download_directory = join(working_directory, DOWNLOAD_DIRECTORY)
 
-        logger.info(f"HLS 2.0 download directory: {cl.dir(download_directory)}")
+        logger.debug(f"HLS 2.0 download directory: {cl.dir(download_directory)}")
 
         self.auth = login()
 

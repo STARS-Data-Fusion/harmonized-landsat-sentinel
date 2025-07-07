@@ -25,11 +25,9 @@ class Timer(object):
         self.end()
 
     def __repr__(self):
-        # print("Timer.__repr__")
         return self.__format__(format_string=DEFAULT_FORMAT)
 
     def __str__(self):
-        # print("Timer.__str__")
         return self.__repr__()
 
     def __format__(self, format_string=DEFAULT_FORMAT):

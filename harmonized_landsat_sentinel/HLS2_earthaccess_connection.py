@@ -54,9 +54,8 @@ class HLS2EarthAccessConnection(HLSConnection):
         if working_directory is None:
             working_directory = abspath(".")
 
-        # working_directory = expanduser(working_directory)
-        logger.info(f"HLS 2.0 working directory: {cl.dir(working_directory)}")
-        logger.info(f"HLS 2.0 download directory: {cl.dir(download_directory)}")
+        logger.debug(f"HLS 2.0 working directory: {cl.dir(working_directory)}")
+        logger.debug(f"HLS 2.0 download directory: {cl.dir(download_directory)}")
 
         self.auth = login()
 
