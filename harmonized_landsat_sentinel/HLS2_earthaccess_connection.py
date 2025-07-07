@@ -59,7 +59,7 @@ class HLS2EarthAccessConnection(HLSConnection):
         logger.info(f"HLS 2.0 download directory: {cl.dir(download_directory)}")
 
         # self.auth = HLS2_earthaccess_login()
-        self.auth = earthaccess.login()
+        self.auth = HLS2_earthaccess_login()
 
         super(HLS2EarthAccessConnection, self).__init__(
             working_directory=working_directory,
