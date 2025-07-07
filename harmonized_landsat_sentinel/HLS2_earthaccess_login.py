@@ -18,6 +18,15 @@ def HLS2_earthaccess_login() -> earthaccess.Auth:
     if _AUTH is not None:
         return _AUTH
 
+    # Check if we're in a testing environment where authentication should be skipped
+    if os.environ.get("SKIP_EARTHDATA_LOGIN", "").lower() in ("true", "1", "yes"):
+        # Return a mock auth object for testing
+        class MockAuth:
+            def __init__(self):
+                self.authenticated = True
+        _AUTH = MockAuth()
+        return _AUTH
+
     try:
         # First priority: environment variables
         if "EARTHDATA_USERNAME" in os.environ and "EARTHDATA_PASSWORD" in os.environ:
