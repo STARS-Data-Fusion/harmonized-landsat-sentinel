@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.10", "3.11"]
 
     steps:
       - name: Checkout repository
@@ -32,3 +32,7 @@ jobs:
       - name: Run tests
         run: |
           pytest
+        env:
+          EARTHDATA_USERNAME: ${{ secrets.EARTHDATA_USERNAME }}
+          EARTHDATA_PASSWORD: ${{ secrets.EARTHDATA_PASSWORD }}
+          SKIP_EARTHDATA_LOGIN: "true"
