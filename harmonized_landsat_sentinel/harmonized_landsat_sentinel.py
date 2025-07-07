@@ -18,7 +18,6 @@ from .HLS1_granule import *
 from .HLS1_landsat_granule import *
 from .HLS1_sentinel_granule import *
 from .HLS2_CMR_connection import *
-from .HLS2_CMR_login import *
 from .HLS2_granule import *
 from .HLS2_landsat_granule import *
 from .HLS2_sentinel_granule import *
@@ -26,6 +25,7 @@ from .HLS2_earthaccess_connection import *
 from .latest_datetime import *
 from .timer import *
 from .timeseries import *
+from .login import *
 
 with open(join(abspath(dirname(__file__)), "version.txt")) as f:
     version = f.read()
