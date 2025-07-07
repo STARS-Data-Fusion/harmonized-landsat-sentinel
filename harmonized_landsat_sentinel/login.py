@@ -9,7 +9,7 @@ __author__ = "Evan Davis"
 
 _AUTH = None
 
-def HLS2_earthaccess_login() -> earthaccess.Auth:
+def login() -> earthaccess.Auth:
     """
     Login to Earthdata using environment variables if available, falling back to netrc credentials, then interactive login.
     """

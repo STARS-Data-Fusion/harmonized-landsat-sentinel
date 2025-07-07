@@ -20,7 +20,7 @@ from rasters import Raster
 
 from .constants import *
 from .exceptions import *
-from .HLS2_CMR_login import HLS2_CMR_login
+from .login import login
 from .HLS_connection import HLSConnection
 from .get_CMR_granule_ID import get_CMR_granule_ID
 from .HLS2_sentinel_granule import HLS2SentinelGranule
@@ -55,7 +55,7 @@ class HLS2CMRConnection(HLSConnection):
 
         logger.info(f"HLS 2.0 download directory: {cl.dir(download_directory)}")
 
-        self.auth = HLS2_CMR_login()
+        self.auth = login()
 
         super(HLS2CMRConnection, self).__init__(
             working_directory=working_directory,

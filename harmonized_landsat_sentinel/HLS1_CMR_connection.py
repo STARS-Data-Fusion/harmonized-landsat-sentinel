@@ -29,7 +29,7 @@ from .HLS_CMR_query import HLS_CMR_query
 from .constants import *
 from .daterange import date_range
 from .exceptions import *
-from .HLS2_CMR_login import HLS2_CMR_login
+from .login import login
 from .HLS_connection import HLSConnection
 from .get_CMR_granule_ID import get_CMR_granule_ID
 from .timer import Timer
@@ -60,7 +60,7 @@ class HLS1CMRConnection(HLSConnection):
 
         logger.info(f"HLS 2.0 download directory: {cl.dir(download_directory)}")
 
-        self.auth = HLS2_CMR_login()
+        self.auth = login()
 
         super(HLS1CMRConnection, self).__init__(
             working_directory=working_directory,

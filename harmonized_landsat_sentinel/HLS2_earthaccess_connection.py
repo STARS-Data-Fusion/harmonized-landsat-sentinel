@@ -18,7 +18,7 @@ import numpy as np
 import rasters as rt
 from rasters import Raster
 
-from .HLS2_earthaccess_login import HLS2_earthaccess_login
+from .login import login
 
 from .constants import *
 from .exceptions import *
@@ -59,7 +59,7 @@ class HLS2EarthAccessConnection(HLSConnection):
         logger.info(f"HLS 2.0 download directory: {cl.dir(download_directory)}")
 
         # self.auth = HLS2_earthaccess_login()
-        self.auth = HLS2_earthaccess_login()
+        self.auth = login()
 
         super(HLS2EarthAccessConnection, self).__init__(
             working_directory=working_directory,
