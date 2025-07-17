@@ -2,6 +2,7 @@
 from typing import List
 from os.path import basename, join, abspath, expanduser
 from glob import glob
+from abc import ABC, abstractmethod
 import numpy as np
 import rasters as rt
 from rasters import Raster
@@ -11,7 +12,7 @@ from .constants import *
 from .exceptions import *
 from .HLS_granule_ID import HLSGranuleID
 
-class HLS2Granule:
+class HLS2Granule(ABC):
     def __init__(self, directory: str, connection=None):
         self.directory = directory
         self.filename = directory  # For compatibility with HLSGranule interface
@@ -157,10 +158,9 @@ class HLS2Granule:
         return image
 
     @property
+    @abstractmethod
     def albedo(self) -> Raster:
-        # Placeholder: implement actual albedo calculation for HLS2
-        # This should be replaced with the correct band combination/formula
-        return (self.red + self.green + self.blue) / 3
+        pass
 
     @property
     def NDSI(self) -> Raster:
