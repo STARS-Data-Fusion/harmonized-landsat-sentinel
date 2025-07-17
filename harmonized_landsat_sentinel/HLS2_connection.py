@@ -16,7 +16,7 @@ import colored_logging as cl
 import numpy as np
 
 import rasters as rt
-from rasters import Raster
+from rasters import Raster, RasterGeometry
 
 from .login import login
 
