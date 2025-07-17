@@ -12,7 +12,7 @@ NASA Jet Propulsion Laboratory 397K
 
 ## Installation
 
-This package is available on PyPi: [https://pypi.org/project/harmonized-landsat-sentinel](https://pypi.org/project/harmonized-landsat-sentinel/1.0.0/)
+This package is available on PyPi: [https://pypi.org/project/harmonized-landsat-sentinel](https://pypi.org/project/harmonized-landsat-sentinel)
 
 ```
 pip install harmonized-landsat-sentinel
@@ -23,9 +23,6 @@ pip install harmonized-landsat-sentinel
 If you use this package to access or analyze the Harmonized Landsat Sentinel (HLS) dataset, please cite the following datasets and research articles:
 
 ### Data Citations
-
-- **HLS v1.4 (L30 and S30)**:  
-  NASA Goddard Space Flight Center; U.S. Geological Survey. (2019). Harmonized Landsat Sentinel-2 (HLS) Product, Version 1.4 [Dataset]. NASA LP DAAC. https://doi.org/10.5067/HLS/HLS.014
 
 - **HLS v2.0 (L30 and S30)**:  
   NASA Goddard Space Flight Center; U.S. Geological Survey. (2022). Harmonized Landsat Sentinel-2 (HLS) Product, Version 2.0 [Dataset]. NASA LP DAAC. https://doi.org/10.5067/HLS/HLS.020
