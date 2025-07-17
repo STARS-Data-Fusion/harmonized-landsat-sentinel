@@ -1,13 +1,12 @@
+
 from typing import List
-
 from os.path import basename, join, abspath, expanduser
-
 from glob import glob
-
 import numpy as np
 import rasters as rt
 from rasters import Raster
-
+import rasterio
+import warnings
 from .constants import *
 from .exceptions import *
 from .HLS_granule_ID import HLSGranuleID
@@ -30,15 +29,6 @@ class HLS2Granule:
     def filenames(self) -> List[str]:
         return sorted(glob(join(self.directory, f"*.*")))
 
-    @property
-    def subdatasets(self) -> List[str]:
-        import rasterio
-        with rasterio.open(self.filename) as file:
-            return sorted(list(file.subdatasets))
-
-    def URI(self, band: str) -> str:
-        return f'HDF4_EOS:EOS_GRID:"{self.filename}":Grid:{band}'
-
     def band_name(self, band):
         if isinstance(band, int):
             band = f"B{band:02d}"
@@ -55,12 +45,9 @@ class HLS2Granule:
     def DN(self, band) -> Raster:
         if band in self.band_images:
             return self.band_images[band]
-        # Try GeoTIFF first, fallback to HDF URI
-        try:
-            filename = self.band_filename(band)
-            image = Raster.open(filename)
-        except HLSBandNotAcquired:
-            image = Raster.open(self.URI(band))
+        # Only support GeoTIFF access in directory
+        filename = self.band_filename(band)
+        image = Raster.open(filename)
         self.band_images[band] = image
         return image
 
@@ -177,42 +164,42 @@ class HLS2Granule:
 
     @property
     def NDSI(self) -> Raster:
-        import warnings
-        warnings.filterwarnings("ignore")
-        NDSI = (self.green - self.SWIR1) / (self.green + self.SWIR1)
-        NDSI = rt.clip(NDSI, -1, 1)
-        NDSI = NDSI.astype(np.float32)
-        NDSI = NDSI.color("jet")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            NDSI = (self.green - self.SWIR1) / (self.green + self.SWIR1)
+            NDSI = rt.clip(NDSI, -1, 1)
+            NDSI = NDSI.astype(np.float32)
+            NDSI = NDSI.color("jet")
         return NDSI
 
     @property
     def MNDWI(self) -> Raster:
-        import warnings
-        warnings.filterwarnings("ignore")
-        MNDWI = (self.green - self.SWIR1) / (self.green + self.SWIR1)
-        MNDWI = rt.clip(MNDWI, -1, 1)
-        MNDWI = MNDWI.astype(np.float32)
-        MNDWI = MNDWI.color("jet")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            MNDWI = (self.green - self.SWIR1) / (self.green + self.SWIR1)
+            MNDWI = rt.clip(MNDWI, -1, 1)
+            MNDWI = MNDWI.astype(np.float32)
+            MNDWI = MNDWI.color("jet")
         return MNDWI
 
     @property
     def NDWI(self) -> Raster:
-        import warnings
-        warnings.filterwarnings("ignore")
-        NDWI = (self.green - self.NIR) / (self.green + self.NIR)
-        NDWI = rt.clip(NDWI, -1, 1)
-        NDWI = NDWI.astype(np.float32)
-        NDWI = NDWI.color("jet")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            NDWI = (self.green - self.NIR) / (self.green + self.NIR)
+            NDWI = rt.clip(NDWI, -1, 1)
+            NDWI = NDWI.astype(np.float32)
+            NDWI = NDWI.color("jet")
         return NDWI
 
     @property
     def moisture(self) -> Raster:
-        import warnings
-        warnings.filterwarnings("ignore")
-        moisture = (self.NIR - self.SWIR1) / (self.NIR + self.SWIR1)
-        moisture = rt.clip(moisture, -1, 1)
-        moisture = moisture.astype(np.float32)
-        moisture = moisture.color("jet")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            moisture = (self.NIR - self.SWIR1) / (self.NIR + self.SWIR1)
+            moisture = rt.clip(moisture, -1, 1)
+            moisture = moisture.astype(np.float32)
+            moisture = moisture.color("jet")
         return moisture
 
     def product(self, product: str) -> Raster:
