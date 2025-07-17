@@ -53,11 +53,11 @@ class HLS2Connection:
             self,
             working_directory: str = HLS2_DOWNLOAD_DIRECTORY,
             download_directory: str = HLS2_DOWNLOAD_DIRECTORY,
-            target_resolution: int = None,
-            username: str = None,
-            password: str = None,
+            target_resolution: int | None = None,
+            username: str | None = None,
+            password: str | None = None,
             retries: int = DEFAULT_RETRIES,
-            wait_seconds: float = DEFAULT_WAIT_SECONDS):
+            wait_seconds: float = DEFAULT_WAIT_SECONDS) -> None:
         """
         Initialize the HLS2Connection object.
         Args:
@@ -93,7 +93,7 @@ class HLS2Connection:
         self._granules = pd.DataFrame([], columns=["ID", "sensor", "tile", "date_UTC", "granule"])
         self.unavailable_dates = {}  # Track unavailable dates for sensors
 
-    def grid(self, tile: str, cell_size: float = None, buffer=0):
+    def grid(self, tile: str, cell_size: float | None = None, buffer: int = 0) -> RasterGeometry:
         """
         Get the grid geometry for a given tile.
         Args:
@@ -108,7 +108,7 @@ class HLS2Connection:
             self.tile_grid = SentinelTileGrid(target_resolution=self.target_resolution)
         return self.tile_grid.grid(tile=tile, cell_size=cell_size, buffer=buffer)
 
-    def mark_date_unavailable(self, sensor: str, tile: str, date_UTC: Union[date, str]):
+    def mark_date_unavailable(self, sensor: str, tile: str, date_UTC: date | str) -> None:
         """
         Mark a date as unavailable for a given sensor and tile.
         Args:
@@ -126,7 +126,7 @@ class HLS2Connection:
             self.unavailable_dates[sensor][tile] = []
         self.unavailable_dates[sensor][tile].append(date_UTC)
 
-    def check_unavailable_date(self, sensor: str, tile: str, date_UTC: Union[date, str]) -> bool:
+    def check_unavailable_date(self, sensor: str, tile: str, date_UTC: date | str) -> bool:
         """
         Check if a date is marked as unavailable for a given sensor and tile.
         Args:
@@ -148,7 +148,7 @@ class HLS2Connection:
             return False
         return True
 
-    def date_directory(self, date_UTC: Union[date, str]) -> str:
+    def date_directory(self, date_UTC: date | str) -> str:
         """
         Get the directory path for a given date.
         Args:
@@ -163,7 +163,7 @@ class HLS2Connection:
 
         return directory
 
-    def sentinel_directory(self, granule: earthaccess.search.DataGranule, date_UTC: Union[date, str]) -> str:
+    def sentinel_directory(self, granule: earthaccess.search.DataGranule, date_UTC: date | str) -> str:
         """
         Get the directory path for a Sentinel granule on a given date.
         Args:
@@ -177,7 +177,7 @@ class HLS2Connection:
 
         return granule_directory
 
-    def landsat_directory(self, granule: earthaccess.search.DataGranule, tile: str, date_UTC: Union[date, str]) -> str:
+    def landsat_directory(self, granule: earthaccess.search.DataGranule, tile: str, date_UTC: date | str) -> str:
         """
         Get the directory path for a Landsat granule on a given date.
         Args:
@@ -197,7 +197,7 @@ class HLS2Connection:
 
         return granule_directory
 
-    def sentinel(self, tile: str, date_UTC: Union[date, str]) -> HLS2SentinelGranule:
+    def sentinel(self, tile: str, date_UTC: date | str) -> HLS2SentinelGranule:
         """
         Download and return a Sentinel granule for a given tile and date.
         Args:
@@ -227,7 +227,7 @@ class HLS2Connection:
 
         return hls_granule
 
-    def landsat(self, tile: str, date_UTC: Union[date, str]) -> HLS2LandsatGranule:
+    def landsat(self, tile: str, date_UTC: date | str) -> HLS2LandsatGranule:
         """
         Download and return a Landsat granule for a given tile and date.
         Args:
@@ -259,7 +259,7 @@ class HLS2Connection:
     def NDVI(
             self,
             tile: str,
-            date_UTC: Union[date, str]) -> Union[Raster, str]:
+            date_UTC: date | str) -> Raster:
         """
         Compute the NDVI (Normalized Difference Vegetation Index) for a given tile and date.
         Combines Sentinel and Landsat NDVI if both are available, otherwise uses whichever is available.
@@ -267,7 +267,7 @@ class HLS2Connection:
             tile (str): Tile identifier.
             date_UTC (date or str): Date for the NDVI computation.
         Returns:
-            Raster or str: NDVI raster or error string if not available.
+            Raster: NDVI raster
         Raises:
             HLSNotAvailable: If neither Sentinel nor Landsat data is available.
         """
@@ -319,7 +319,7 @@ class HLS2Connection:
     def albedo(
             self,
             tile: str,
-            date_UTC: Union[date, str]) -> Union[Raster, str]:
+            date_UTC: date | str) -> Raster:
         """
         Compute the albedo for a given tile and date.
         Combines Sentinel and Landsat albedo if both are available, otherwise uses whichever is available.
@@ -327,7 +327,7 @@ class HLS2Connection:
             tile (str): Tile identifier.
             date_UTC (date or str): Date for the albedo computation.
         Returns:
-            Raster or str: Albedo raster or error string if not available.
+            Raster: Albedo raster
         Raises:
             HLSNotAvailable: If neither Sentinel nor Landsat data is available.
         """
@@ -377,12 +377,12 @@ class HLS2Connection:
 
     def search(
             self,
-            tile: str = None,
-            start_UTC: Union[date, datetime, str] = None,
-            end_UTC: Union[date, datetime, str] = None,
-            collections: List[str] = None,
-            IDs: List[str] = None,
-            page_size: int = PAGE_SIZE):
+            tile: str | None = None,
+            start_UTC: date | datetime | str | None = None,
+            end_UTC: date | datetime | str | None = None,
+            collections: list[str] | None = None,
+            IDs: list[str] | None = None,
+            page_size: int = PAGE_SIZE) -> pd.DataFrame:
         """
         Search for HLS granules for a given tile and date range.
         Args:
@@ -459,7 +459,7 @@ class HLS2Connection:
 
         return granules
 
-    def dates_listed(self, tile: str) -> Set[date]:
+    def dates_listed(self, tile: str) -> set[date]:
         """
         Get the set of dates for which granules are already listed for a tile.
         Args:
@@ -472,9 +472,9 @@ class HLS2Connection:
     def listing(
             self,
             tile: str,
-            start_UTC: Union[date, str],
-            end_UTC: Union[date, str] = None,
-            page_size: int = PAGE_SIZE) -> tuple[pd.DataFrame, pd.DataFrame]:
+            start_UTC: date | str,
+            end_UTC: date | str | None = None,
+            page_size: int = PAGE_SIZE) -> pd.DataFrame:
         """
         List available HLS2 granules for a tile and date range, including missing data flags.
         Args:
@@ -604,7 +604,7 @@ class HLS2Connection:
 
         return listing
 
-    def sentinel_granule(self, tile: str, date_UTC: Union[date, str]) -> earthaccess.search.DataGranule:
+    def sentinel_granule(self, tile: str, date_UTC: date | str) -> earthaccess.search.DataGranule:
         """
         Get the Sentinel granule for a given tile and date.
         Args:
@@ -631,7 +631,7 @@ class HLS2Connection:
         else:
             return granule
 
-    def landsat_granule(self, tile: str, date_UTC: Union[date, str]) -> earthaccess.search.DataGranule:
+    def landsat_granule(self, tile: str, date_UTC: date | str) -> earthaccess.search.DataGranule:
         """
         Get the Landsat granule for a given tile and date.
         Args:
@@ -669,8 +669,8 @@ class HLS2Connection:
             self,
             product: str,
             tile: str,
-            date_UTC: Union[date, str],
-            geometry: RasterGeometry = None) -> Union[Raster, str]:
+            date_UTC: date | str,
+            geometry: RasterGeometry | None = None) -> Raster:
         """
         Retrieve a specific product (e.g., NDVI, albedo) for a given tile and date.
         Combines Sentinel and Landsat if both are available, otherwise uses whichever is available.
@@ -680,7 +680,7 @@ class HLS2Connection:
             date_UTC (date or str): Date for the product.
             geometry (RasterGeometry, optional): Target geometry for resampling.
         Returns:
-            Raster or str: Product raster or error string if not available.
+            Raster: Raster for given data layer or derived variable
         Raises:
             HLSNotAvailable: If neither Sentinel nor Landsat data is available.
         """
@@ -705,15 +705,27 @@ class HLS2Connection:
         except HLSLandsatMissing as e:
             raise e
 
+
         if sentinel is None and landsat is None:
             raise HLSNotAvailable(f"HLS2 is not available at {tile} on {date_UTC}")
         elif sentinel is not None and landsat is None:
-            image = sentinel.product(product)
+            try:
+                image = sentinel.product(product)
+            except Exception as e:
+                raise HLSNotAvailable(f"Sentinel product '{product}' is not available at {tile} on {date_UTC}") from e
         elif sentinel is None and landsat is not None:
-            image = landsat.product(product)
+            try:
+                image = landsat.product(product)
+            except Exception as e:
+                raise HLSNotAvailable(f"Landsat product '{product}' is not available at {tile} on {date_UTC}") from e
         else:
             # Average NDVI from both sensors if available (for NDVI product)
-            image = rt.Raster(np.nanmean(np.dstack([sentinel.NDVI, landsat.NDVI]), axis=2), geometry=sentinel.geometry)
+            try:
+                sentinel_data = getattr(sentinel, product)
+                landsat_data = getattr(landsat, product)
+            except AttributeError as e:
+                raise HLSNotAvailable(f"Product '{product}' is not available from both sensors at {tile} on {date_UTC}") from e
+            image = rt.Raster(np.nanmean(np.dstack([sentinel_data, landsat_data]), axis=2), geometry=sentinel.geometry)
 
         # Resample image to target resolution if needed
         if self.target_resolution > 30:
