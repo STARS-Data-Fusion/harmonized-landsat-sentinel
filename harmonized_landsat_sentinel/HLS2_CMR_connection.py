@@ -230,6 +230,8 @@ class HLS2CMRConnection(HLSConnection):
             # Upsample using cubic resampling
             NDVI = NDVI.to_geometry(geometry, resampling="cubic")
 
+        return NDVI
+
     def albedo(
             self,
             tile: str,
@@ -328,6 +330,8 @@ class HLS2CMRConnection(HLSConnection):
         elif self.target_resolution < 30:
             # Upsample using cubic resampling
             albedo = albedo.to_geometry(geometry, resampling="cubic")
+
+        return albedo
 
     def search(
             self,
