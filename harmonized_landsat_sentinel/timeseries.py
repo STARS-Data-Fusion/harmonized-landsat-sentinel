@@ -58,8 +58,8 @@ def timeseries(
     if download_directory is None:
         from harmonized_landsat_sentinel import harmonized_landsat_sentinel as HLS
     else:
-        from harmonized_landsat_sentinel import HLS2EarthAccessConnection
-        HLS = HLS2EarthAccessConnection(directory=download_directory)
+        from harmonized_landsat_sentinel import HLS2Connection
+        HLS = HLS2Connection(directory=download_directory)
     
     download_directory = HLS.download_directory
     logger.info(f"  Directory: {download_directory}")
