@@ -134,8 +134,7 @@ class HLS2CMRConnection(HLSConnection):
     def NDVI(
             self,
             tile: str,
-            date_UTC: Union[date, str],
-            **kwargs) -> Raster:
+            date_UTC: Union[date, str]) -> Raster:
         """
         Retrieve the NDVI (Normalized Difference Vegetation Index) raster for a given HLS tile and date.
     
@@ -235,8 +234,7 @@ class HLS2CMRConnection(HLSConnection):
     def albedo(
             self,
             tile: str,
-            date_UTC: Union[date, str],
-            **kwargs) -> Raster:
+            date_UTC: Union[date, str]) -> Raster:
         """
         Retrieve the surface albedo raster for a given HLS tile and date.
     
