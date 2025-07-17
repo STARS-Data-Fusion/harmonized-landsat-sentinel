@@ -135,163 +135,199 @@ class HLS2CMRConnection(HLSConnection):
             self,
             tile: str,
             date_UTC: Union[date, str],
-            product_filename: str = None,
-            preview_filename: str = None,
-            save_data: bool = False,
-            save_preview: bool = False,
-            return_filename: bool = False) -> Union[Raster, str]:
+            **kwargs) -> Raster:
+        """
+        Retrieve the NDVI (Normalized Difference Vegetation Index) raster for a given HLS tile and date.
+    
+        This method attempts to retrieve the NDVI data for the specified tile and date
+        from both Sentinel-2 (S30) and Landsat-8/9 (L30) HLS products. If both are available,
+        it computes the mean NDVI. If only one is available, it uses that. If neither is
+        available, it raises an exception.
+    
+        The returned NDVI raster is resampled to the target resolution if necessary.
+    
+        Parameters
+        ----------
+        tile : str
+            The HLS tile identifier (e.g., '10SEG'). May include sub-tile info, but only the first 5 characters are used for data retrieval.
+        date_UTC : Union[date, str]
+            The UTC date for which to retrieve the NDVI. Can be a `date` object or an ISO-format string.
+        **kwargs
+            Additional keyword arguments (currently unused).
+    
+        Returns
+        -------
+        Raster
+            The NDVI raster for the specified tile and date, resampled to the target resolution.
+    
+        Raises
+        ------
+        HLSNotAvailable
+            If neither Sentinel nor Landsat data is available for the given tile and date.
+        HLSSentinelMissing, HLSLandsatMissing
+            If the granule is missing on the remote server.
+        HLSBandNotAcquired
+            If the NDVI band is not available in the granule.
+    
+        Notes
+        -----
+        - If both Sentinel and Landsat data are available, the mean NDVI is computed.
+        - The raster is resampled to the target resolution using "average" (if >30m) or "cubic" (if <30m).
+        """
+    
+        # Save the original tile and its geometry for later use
         target_tile = tile
         target_geometry = self.grid(target_tile)
+    
+        # Use only the first 5 characters of the tile for data retrieval
         tile = tile[:5]
         geometry = self.grid(tile)
-
-        if product_filename is None:
-            product_filename = self.product_filename(
-                product="NDVI",
-                date_UTC=date_UTC,
-                tile=tile
-            )
-
-        if preview_filename is None:
-            preview_filename = product_filename.replace(".tif", ".jpeg")
-
-        if exists(product_filename):
-            if return_filename:
-                return product_filename
-            else:
-                logger.info(f"loading HLS2 NDVI: {cl.file(product_filename)}")
-                return Raster.open(product_filename, geometry=target_geometry)
-
+    
+        # Attempt to retrieve Sentinel granule for the tile and date
         try:
             sentinel = self.sentinel(tile=tile, date_UTC=date_UTC)
         except HLSSentinelNotAvailable:
             sentinel = None
         except HLSSentinelMissing as e:
             raise e
-
+    
+        # Attempt to retrieve Landsat granule for the tile and date
         try:
             landsat = self.landsat(tile=tile, date_UTC=date_UTC)
         except HLSLandsatNotAvailable:
             landsat = None
         except HLSLandsatMissing as e:
             raise e
-
+    
+        # Handle cases where neither, one, or both granules are available
         if sentinel is None and landsat is None:
+            # No data available from either source
             raise HLSNotAvailable(f"HLS2 is not available at {tile} on {date_UTC}")
         elif sentinel is not None and landsat is None:
+            # Only Sentinel data is available
             try:
                 NDVI = sentinel.NDVI
             except HLSBandNotAcquired:
                 raise HLSNotAvailable(f"HLS2 S30 is not available at {tile} on {date_UTC}")
         elif sentinel is None and landsat is not None:
+            # Only Landsat data is available
             try:
                 NDVI = landsat.NDVI
             except HLSBandNotAcquired:
                 raise HLSNotAvailable(f"HLS2 L30 is not available at {tile} on {date_UTC}")
         else:
-            NDVI = rt.Raster(np.nanmean(np.dstack([sentinel.NDVI, landsat.NDVI]), axis=2), geometry=sentinel.geometry)
-
+            # Both Sentinel and Landsat data are available; compute mean NDVI
+            NDVI = rt.Raster(
+                np.nanmean(np.dstack([sentinel.NDVI, landsat.NDVI]), axis=2),
+                geometry=sentinel.geometry
+            )
+    
+        # Resample the raster to the target resolution if needed
         if self.target_resolution > 30:
+            # Downsample using average resampling
             NDVI = NDVI.to_geometry(geometry, resampling="average")
         elif self.target_resolution < 30:
+            # Upsample using cubic resampling
             NDVI = NDVI.to_geometry(geometry, resampling="cubic")
-
-        if (save_data or return_filename) and not exists(product_filename):
-            logger.info(f"saving HLS2 NDVI: {cl.file(product_filename)}")
-            NDVI.to_COG(product_filename)
-
-            if save_preview:
-                logger.info(f"saving HLS2 NDVI preview: {cl.file(preview_filename)}")
-                NDVI.to_geojpeg(preview_filename)
-
-        NDVI = NDVI.to_geometry(target_geometry)
-
-        if return_filename:
-            return product_filename
-        else:
-            return NDVI
 
     def albedo(
             self,
             tile: str,
             date_UTC: Union[date, str],
-            product_filename: str = None,
-            preview_filename: str = None,
-            save_data: bool = False,
-            save_preview: bool = False,
-            return_filename: bool = False) -> Union[Raster, str]:
-
+            **kwargs) -> Raster:
+        """
+        Retrieve the surface albedo raster for a given HLS tile and date.
+    
+        This method attempts to retrieve the albedo data for the specified tile and date
+        from both Sentinel-2 (S30) and Landsat-8/9 (L30) HLS products. If both are available,
+        it computes the mean albedo. If only one is available, it uses that. If neither is
+        available, it raises an exception.
+    
+        The returned albedo raster is resampled to the target resolution if necessary.
+    
+        Parameters
+        ----------
+        tile : str
+            The HLS tile identifier (e.g., '10SEG'). May include sub-tile info, but only the first 5 characters are used for data retrieval.
+        date_UTC : Union[date, str]
+            The UTC date for which to retrieve the albedo. Can be a `date` object or an ISO-format string.
+        **kwargs
+            Additional keyword arguments (currently unused).
+    
+        Returns
+        -------
+        Raster
+            The surface albedo raster for the specified tile and date, resampled to the target resolution.
+    
+        Raises
+        ------
+        HLSNotAvailable
+            If neither Sentinel nor Landsat data is available for the given tile and date.
+        HLSSentinelMissing, HLSLandsatMissing
+            If the granule is missing on the remote server.
+        HLSBandNotAcquired
+            If the albedo band is not available in the granule.
+    
+        Notes
+        -----
+        - If both Sentinel and Landsat data are available, the mean albedo is computed.
+        - The raster is resampled to the target resolution using "average" (if >30m) or "cubic" (if <30m).
+        """
+    
+        # Save the original tile and its geometry for later use
         target_tile = tile
         target_geometry = self.grid(target_tile)
+    
+        # Use only the first 5 characters of the tile for data retrieval
         tile = tile[:5]
         geometry = self.grid(tile)
-
-        if product_filename is None:
-            product_filename = self.product_filename(
-                product="albedo",
-                date_UTC=date_UTC,
-                tile=tile
-            )
-
-        if preview_filename is None:
-            preview_filename = product_filename.replace(".tif", ".jpeg")
-
-        if exists(product_filename):
-            if return_filename:
-                return product_filename
-            else:
-                logger.info(f"loading HLS2 albedo: {cl.file(product_filename)}")
-                return Raster.open(product_filename, geometry=target_geometry)
-
+    
+        # Attempt to retrieve Sentinel granule for the tile and date
         try:
             sentinel = self.sentinel(tile=tile, date_UTC=date_UTC)
         except HLSSentinelNotAvailable:
             sentinel = None
         except HLSSentinelMissing as e:
             raise e
-
+    
+        # Attempt to retrieve Landsat granule for the tile and date
         try:
             landsat = self.landsat(tile=tile, date_UTC=date_UTC)
         except HLSLandsatNotAvailable:
             landsat = None
         except HLSLandsatMissing as e:
             raise e
-
+    
+        # Handle cases where neither, one, or both granules are available
         if sentinel is None and landsat is None:
+            # No data available from either source
             raise HLSNotAvailable(f"HLS2 is not available at {tile} on {date_UTC}")
         elif sentinel is not None and landsat is None:
+            # Only Sentinel data is available
             try:
                 albedo = sentinel.albedo
             except HLSBandNotAcquired:
                 raise HLSNotAvailable(f"HLS2 S30 is not available at {tile} on {date_UTC}")
         elif sentinel is None and landsat is not None:
+            # Only Landsat data is available
             try:
                 albedo = landsat.albedo
             except HLSBandNotAcquired:
                 raise HLSNotAvailable(f"HLS2 L30 is not available at {tile} on {date_UTC}")
         else:
-            albedo = rt.Raster(np.nanmean(np.dstack([sentinel.albedo, landsat.albedo]), axis=2),
-                               geometry=sentinel.geometry)
-
+            # Both Sentinel and Landsat data are available; compute mean albedo
+            albedo = rt.Raster(
+                np.nanmean(np.dstack([sentinel.albedo, landsat.albedo]), axis=2),
+                geometry=sentinel.geometry
+            )
+    
+        # Resample the raster to the target resolution if needed
         if self.target_resolution > 30:
+            # Downsample using average resampling
             albedo = albedo.to_geometry(geometry, resampling="average")
         elif self.target_resolution < 30:
+            # Upsample using cubic resampling
             albedo = albedo.to_geometry(geometry, resampling="cubic")
-
-        if (save_data and return_filename) and not exists(product_filename):
-            logger.info(f"saving HLS2 albedo: {cl.file(product_filename)}")
-            albedo.to_COG(product_filename)
-
-            if save_preview:
-                logger.info(f"saving HLS2 albedo preview: {cl.file(preview_filename)}")
-                albedo.to_geojpeg(preview_filename)
-
-        albedo = albedo.to_geometry(target_geometry)
-
-        if return_filename:
-            return product_filename
-
-        return albedo
 
     def search(
             self,
