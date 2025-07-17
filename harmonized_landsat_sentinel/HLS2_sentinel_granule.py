@@ -3,7 +3,7 @@ from rasters import Raster, MultiRaster
 from .constants import *
 from .HLS2_granule import HLS2Granule
 
-class HLSSentinelGranule(HLSGranule):
+class HLS2SentinelGranule(HLS2Granule):
     @property
     def coastal_aerosol(self) -> Raster:
         return self.band(1)
