@@ -484,3 +484,46 @@ class HLS2Connection:
                 f"Landsat is missing on remote server at tile {cl.place(tile)} on {cl.time(date_UTC)}")
         else:
             return granule
+
+    def product(
+            self,
+            product: str,
+            tile: str,
+            date_UTC: Union[date, str],
+            geometry: RasterGeometry = None) -> Union[Raster, str]:
+        target_tile = tile
+        target_geometry = self.grid(target_tile)
+        tile = tile[:5]
+
+        if geometry is None:
+            geometry = self.grid(tile)
+
+        try:
+            sentinel = self.sentinel(tile=tile, date_UTC=date_UTC)
+        except HLSSentinelNotAvailable:
+            sentinel = None
+        except HLSSentinelMissing as e:
+            raise e
+
+        try:
+            landsat = self.landsat(tile=tile, date_UTC=date_UTC)
+        except HLSLandsatNotAvailable:
+            landsat = None
+        except HLSLandsatMissing as e:
+            raise e
+
+        if sentinel is None and landsat is None:
+            raise HLSNotAvailable(f"HLS2 is not available at {tile} on {date_UTC}")
+        elif sentinel is not None and landsat is None:
+            image = sentinel.product(product)
+        elif sentinel is None and landsat is not None:
+            image = landsat.product(product)
+        else:
+            image = rt.Raster(np.nanmean(np.dstack([sentinel.NDVI, landsat.NDVI]), axis=2), geometry=sentinel.geometry)
+
+        if self.target_resolution > 30:
+            image = image.to_geometry(geometry, resampling="average")
+        elif self.target_resolution < 30:
+            image = image.to_geometry(geometry, resampling="cubic")
+
+        return image
