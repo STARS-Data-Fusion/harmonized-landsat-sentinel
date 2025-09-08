@@ -41,6 +41,9 @@ dev = [
     "twine"
 ]
 
+[tool.setuptools.packages.find]
+exclude = ["notebooks*", "debugging*"]
+
 [tool.setuptools.package-data]
 harmonized_landsat_sentinel = ["*.txt"]
 
