@@ -502,8 +502,13 @@ class HLS2Connection:
         if isinstance(end_UTC, str):
             end_UTC = parser.parse(end_UTC).date()
 
+        # If we don't need to check any dates, return
+        date_range_set = set(date_range(start_UTC, end_UTC))
+        if len(date_range_set) == 0:
+            return pd.DataFrame([], columns=["date_UTC", "tile", "sentinel", "landsat"])
+
         # If all dates are already listed, return the subset
-        if set(date_range(start_UTC, end_UTC)) <= self.dates_listed(tile):
+        if date_range_set <= self.dates_listed(tile):
             listing_subset = self._listing[self._listing.tile == tile]
             listing_subset = listing_subset[listing_subset.date_UTC.apply(lambda date_UTC: parser.parse(str(date_UTC)).date() >= start_UTC and parser.parse(str(date_UTC)).date() <= end_UTC)]
             listing_subset = listing_subset.sort_values(by="date_UTC")
