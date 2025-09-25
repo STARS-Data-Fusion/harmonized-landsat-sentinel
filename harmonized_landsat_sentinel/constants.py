@@ -1,4 +1,4 @@
-from os.path import join
+from os.path import join, expanduser
 from matplotlib.colors import LinearSegmentedColormap
 
 DEFAULT_REMOTE = "https://hls.gsfc.nasa.gov/data/v1.4/"
@@ -7,8 +7,8 @@ DEFAULT_WORKING_DIRECTORY = "."
 DEFAULT_TARGET_RESOLUTION = 30
 DEFAULT_PRODUCTS = ["NIR", "red"]
 
-DOWNLOAD_DIRECTORY = join("~", "data", "HLS")
-HLS2_DOWNLOAD_DIRECTORY = join("~", "data", "HLS2")
+DOWNLOAD_DIRECTORY = expanduser(join("~", "data", "HLS"))
+HLS2_DOWNLOAD_DIRECTORY = expanduser(join("~", "data", "HLS2"))
 
 CONNECTION_CLOSE = {
     "Connection": "close",

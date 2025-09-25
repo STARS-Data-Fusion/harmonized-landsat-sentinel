@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "harmonized-landsat-sentinel"
-version = "2.0.0"
+version = "2.0.1"
 description = "Harmonized Landsat Sentinel (HLS) search and download utility"
 readme = "README.md"
 authors = [
@@ -40,6 +40,9 @@ dev = [
     "pytest",
     "twine"
 ]
+
+[tool.setuptools.packages.find]
+exclude = ["notebooks*", "debugging*"]
 
 [tool.setuptools.package-data]
 harmonized_landsat_sentinel = ["*.txt"]
