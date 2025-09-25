@@ -19,8 +19,7 @@ from .timer import *
 from .timeseries import *
 from .login import *
 
-with open(join(abspath(dirname(__file__)), "version.txt")) as f:
-    version = f.read()
+from .version import version
 
 __version__ = version
 __author__ = "Gregory H. Halverson, Evan Davis"
