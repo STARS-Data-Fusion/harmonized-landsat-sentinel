@@ -17,7 +17,7 @@ BANDS = [
 
 logger = logging.getLogger(__name__)
 
-def timeseries(
+def generate_HLS_timeseries(
     bands: Optional[Union[List[str], str]] = None,
     tile: Optional[str] = None,
     geometry: Optional[RasterGeometry] = None,
@@ -34,6 +34,7 @@ def timeseries(
         start_date (Optional[Union[str, date]]): Start date as YYYY-MM-DD string or date object.
         end_date (Optional[Union[str, date]]): End date as YYYY-MM-DD string or date object.
         download_directory (Optional[str]): Directory to save or read data.
+        output_directory (Optional[str]): Directory to write output files. Defaults to download_directory.
 
     Returns:
         None
@@ -63,6 +64,12 @@ def timeseries(
     
     download_directory = HLS.download_directory
     logger.info(f"  Directory: {download_directory}")
+
+    # Default output_directory to download_directory if not specified
+    if output_directory is None:
+        output_directory = download_directory
+    
+    logger.info(f"  Output directory: {output_directory}")
 
     listing = HLS.listing(
         tile=tile,

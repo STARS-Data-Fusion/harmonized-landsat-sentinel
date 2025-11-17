@@ -16,7 +16,7 @@ from .HLS2_sentinel_granule import *
 from .HLS2_connection import *
 from .latest_datetime import *
 from .timer import *
-from .timeseries import *
+from .generate_HLS_timeseries import *
 from .login import *
 
 from .version import version

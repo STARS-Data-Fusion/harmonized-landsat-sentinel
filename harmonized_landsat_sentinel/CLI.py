@@ -1,7 +1,7 @@
 import sys
 import argparse
 from typing import Optional, List
-from harmonized_landsat_sentinel import __version__, timeseries
+from harmonized_landsat_sentinel import __version__, generate_HLS_timeseries
 
 from .parse_arguments import parse_arguments
 
@@ -23,7 +23,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         print_version_and_exit()
 
     # Call the timeseries function with parsed arguments
-    timeseries(
+    generate_HLS_timeseries(
         bands=args.band,
         tile=args.tile,
         start_date=args.start,
