@@ -5,6 +5,7 @@ from datetime import date, datetime
 from dateutil import parser
 from sentinel_tiles import sentinel_tiles
 from rasters import RasterGeometry
+import rasters as rt
 
 BANDS = [
     "red",
@@ -117,6 +118,7 @@ def generate_HLS_timeseries(
         d_parsed = parser.parse(d).date()
         
         for band in bands:
+            images = []
             
             for tile in tiles:
                 # Skip if this tile doesn't have data for this date
@@ -131,21 +133,33 @@ def generate_HLS_timeseries(
                         date_UTC=d_parsed,
                         tile=tile
                     )
+                    
+                    if geometry is None:
+                        filename = join(
+                            output_directory,
+                            f"HLS_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
+                        )
 
-                    if geometry is not None:
-                        image = image.to_geometry(geometry)
+                        logger.info(f"writing image to {filename}")
+                        image.to_geotiff(expanduser(filename))
+                        output_filenames.append(filename)
+                    else:
+                        images.append(image)
 
                 except Exception as e:
                     logger.error(e)
                     continue
-                    
+                
+            if geometry is None:
                 filename = join(
                     output_directory,
-                    f"HLS_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
+                    f"HLS_{band}_{d_parsed.strftime('%Y%m%d')}.tif"
                 )
-
+                
+                composite = rt.mosaic(images, geometry=geometry)
+                
                 logger.info(f"writing image to {filename}")
-                image.to_geotiff(expanduser(filename))
+                composite.to_geotiff(expanduser(filename))
                 output_filenames.append(filename)
     
     return output_filenames
