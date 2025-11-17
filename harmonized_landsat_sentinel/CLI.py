@@ -26,8 +26,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     generate_HLS_timeseries(
         bands=args.band,
         tile=args.tile,
-        start_date=args.start,
-        end_date=args.end,
+        start_date_UTC=args.start,
+        end_date_UTC=args.end,
         download_directory=args.directory
     )
 
