@@ -150,7 +150,7 @@ def generate_HLS_timeseries(
                     logger.error(e)
                     continue
                 
-            if geometry is None:
+            if geometry is not None:
                 filename = join(
                     output_directory,
                     f"HLS_{band}_{d_parsed.strftime('%Y%m%d')}.tif"
