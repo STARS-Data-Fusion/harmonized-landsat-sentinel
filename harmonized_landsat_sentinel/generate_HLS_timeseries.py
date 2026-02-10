@@ -36,21 +36,36 @@ def generate_HLS_timeseries(
     start_date_UTC: Optional[Union[str, date]] = None,          # Starting date for timeseries (string or date object)
     end_date_UTC: Optional[Union[str, date]] = None,            # Ending date for timeseries (string or date object)
     download_directory: Optional[str] = None,                   # Directory for caching downloaded HLS data
-    output_directory: Optional[str] = None) -> List[str]:       # Directory for saving processed output files
+    output_directory: Optional[str] = None,                     # Directory for saving processed output files
+    source: str = "HLS") -> List[str]:                           # Data source: "HLS" (combined, default), "S30" (Sentinel-2), "L30" (Landsat-8), or "both" (separate streams)
     """
     Produce a timeseries of HLS data for the specified parameters.
 
     Args:
-        band (Optional[str]): The spectral band to use (e.g., "B04").
-        tiles (Optional[Union[List[str], str]]): The HLS tile identifier(s) (e.g., "10SEG" or ["10SEG", "10TEL"]).
-        start_date (Optional[Union[str, date]]): Start date as YYYY-MM-DD string or date object.
-        end_date (Optional[Union[str, date]]): End date as YYYY-MM-DD string or date object.
+        bands (Optional[Union[List[str], str]]): Spectral band(s) to retrieve (single string or list).
+        tiles (Optional[Union[List[str], str]]): HLS tile identifier(s) (e.g., "10SEG" or ["10SEG", "10TEL"]).
+        geometry (Optional[RasterGeometry]): Geographic area of interest for automatic tile selection.
+        start_date_UTC (Optional[Union[str, date]]): Start date as YYYY-MM-DD string or date object.
+        end_date_UTC (Optional[Union[str, date]]): End date as YYYY-MM-DD string or date object.
         download_directory (Optional[str]): Directory to save or read data.
         output_directory (Optional[str]): Directory to write output files. Defaults to download_directory.
+        source (str): Data source for timeseries. Options:
+            - "HLS" (default): Combined HLS data (averages S30 and L30 when both available)
+            - "S30": Sentinel-2 only
+            - "L30": Landsat-8 only
+            - "both": Separate timeseries for S30 and L30 simultaneously
 
     Returns:
         List[str]: List of output filenames that were created.
+    
+    Raises:
+        ValueError: If invalid source specified or required parameters missing.
     """
+    # Validate source parameter
+    valid_sources = {"HLS", "S30", "L30", "both"}
+    if source not in valid_sources:
+        raise ValueError(f"source must be one of {valid_sources}, got '{source}'")
+    
     # Check if start_date_UTC is provided as a string (e.g., "2023-01-01")
     if isinstance(start_date_UTC, str):
         # Convert string to date object using dateutil parser for flexible parsing
@@ -103,6 +118,8 @@ def generate_HLS_timeseries(
     logger.info(f"  Start date: {start_date_UTC}")
     # Log the end date of the timeseries
     logger.info(f"  End date: {end_date_UTC}")
+    # Log the data source
+    logger.info(f"  Source: {source}")
     
     # Check if a custom download directory was specified
     if download_directory is None:
@@ -122,12 +139,11 @@ def generate_HLS_timeseries(
     # Log the directory where output files will be saved
     logger.info(f"  Output directory: {output_directory}")
 
+    # Create a dictionary to store which dates are available for each tile and sensor
+    # Format: {tile_id: {"S30": [dates], "L30": [dates]}}
+    tile_sensor_dates = {}
     # Create a set to collect all unique dates available across all tiles
-    # Using a set automatically handles duplicates
     all_dates = set()
-    # Create a dictionary to store which dates are available for each tile
-    # Format: {tile_id: [list_of_dates]}
-    tile_dates = {}
     
     # Iterate through each tile to query available dates
     for tile in tiles:
@@ -139,114 +155,259 @@ def generate_HLS_timeseries(
             tile=tile,                    # The specific tile identifier
             start_UTC=start_date_UTC,     # Start date for the query
             end_UTC=end_date_UTC          # End date for the query
-        ).dropna(how="all", subset=["sentinel", "landsat"])  # Remove rows where both sentinel and landsat are null
+        )
 
-        # Extract and sort the available dates from the listing
-        dates_available = sorted(listing.date_UTC)
+        # Extract dates available for each sensor
+        s30_dates = sorted(listing[listing.sentinel.notna()].date_UTC.unique())
+        l30_dates = sorted(listing[listing.landsat.notna()].date_UTC.unique())
 
         # Check if any dates were found for this tile
-        if len(dates_available) == 0:
+        if len(s30_dates) == 0 and len(l30_dates) == 0:
             # Log a warning if no data is available for this tile in the date range
             logger.warning(f"no dates available for tile {tile} in the date range {start_date_UTC} to {end_date_UTC}")
-            # Store empty list for this tile in the dictionary
-            tile_dates[tile] = []
+            # Store empty dictionaries for this tile
+            tile_sensor_dates[tile] = {"S30": [], "L30": []}
             # Skip to the next tile
             continue
 
-        # Log how many dates were found for this tile
-        logger.info(f"{len(dates_available)} dates available for tile {tile}:")
+        # Log availability for each sensor
+        if len(s30_dates) > 0:
+            logger.info(f"{len(s30_dates)} S30 dates available for tile {tile}")
+            for d in s30_dates:
+                logger.info(f"  * {d} (S30)")
+        if len(l30_dates) > 0:
+            logger.info(f"{len(l30_dates)} L30 dates available for tile {tile}")
+            for d in l30_dates:
+                logger.info(f"  * {d} (L30)")
         
-        # Iterate through each available date and log it
-        for d in dates_available:
-            logger.info(f"  * {d}")
-        
-        # Store the list of available dates for this tile in the dictionary
-        tile_dates[tile] = dates_available
-        # Add all dates from this tile to the set of all dates (automatically handles duplicates)
-        all_dates.update(dates_available)
+        # Store the lists of available dates for each sensor in this tile
+        tile_sensor_dates[tile] = {"S30": s30_dates, "L30": l30_dates}
+        # Add all dates from this tile to the set of all dates
+        all_dates.update(s30_dates)
+        all_dates.update(l30_dates)
     
     # Convert the set of all dates to a sorted list
     all_dates = sorted(all_dates)
     # Log the total number of unique dates found across all tiles
     logger.info(f"Total unique dates across all tiles: {len(all_dates)}")
     
+    # Helper function to extract and save band data for a specific sensor
+    def _process_sensor_band(sensor: str, d: str, d_parsed: date, band: str, tile: str) -> Optional[str]:
+        """
+        Helper to extract and save a single band for a specific sensor.
+        
+        Args:
+            sensor (str): "S30" or "L30"
+            d (str): Date as string (YYYY-MM-DD)
+            d_parsed (date): Date object
+            band (str): Band name
+            tile (str): Tile identifier
+        
+        Returns:
+            Optional[str]: Filename if successful, None otherwise
+        """
+        logger.info(f"extracting band {band} for {sensor} tile {tile} on date {d_parsed}")
+        
+        try:
+            # Get the appropriate granule (sentinel or landsat)
+            if sensor == "S30":
+                granule = HLS.sentinel(tile=tile, date_UTC=d_parsed)
+            else:  # sensor == "L30"
+                granule = HLS.landsat(tile=tile, date_UTC=d_parsed)
+            
+            # Extract the band from the granule
+            image = granule.product(band)
+            
+            # Create output filename with sensor designation
+            filename = join(
+                output_directory,
+                f"{sensor}_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
+            )
+
+            # Log that we're saving the image to disk
+            logger.info(f"writing image to {filename}")
+            # Export the image to GeoTIFF format
+            image.to_geotiff(expanduser(filename))
+            
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Error processing {sensor} band {band} for tile {tile} on {d_parsed}: {e}")
+            return None
+    
+    # Helper function to process bands and create mosaics when geometry is provided
+    def _process_sensor_mosaic(sensor: str, d: str, d_parsed: date, band: str) -> Optional[str]:
+        """
+        Helper to extract and mosaic a band across tiles for a specific sensor.
+        
+        Args:
+            sensor (str): "S30" or "L30"
+            d (str): Date as string (YYYY-MM-DD)
+            d_parsed (date): Date object
+            band (str): Band name
+        
+        Returns:
+            Optional[str]: Filename if successful, None otherwise
+        """
+        images = []
+        
+        # Iterate through each tile to collect images
+        for tile in tiles:
+            # Check if this tile has data available for this sensor on this date
+            available_dates = tile_sensor_dates.get(tile, {}).get(sensor, [])
+            if d not in available_dates:
+                continue
+            
+            logger.info(f"extracting band {band} for {sensor} tile {tile} on date {d_parsed}")
+            
+            try:
+                # Get the appropriate granule
+                if sensor == "S30":
+                    granule = HLS.sentinel(tile=tile, date_UTC=d_parsed)
+                else:  # sensor == "L30"
+                    granule = HLS.landsat(tile=tile, date_UTC=d_parsed)
+                
+                # Extract the band
+                image = granule.product(band)
+                images.append(image)
+                
+            except Exception as e:
+                logger.error(f"Error processing {sensor} band {band} for tile {tile} on {d_parsed}: {e}")
+                continue
+        
+        # Only create mosaic if we collected images
+        if len(images) == 0:
+            logger.warning(f"No images collected for {sensor} band {band} on {d_parsed}")
+            return None
+        
+        # Create output filename with sensor designation
+        filename = join(
+            output_directory,
+            f"{sensor}_{band}_{d_parsed.strftime('%Y%m%d')}.tif"
+        )
+        
+        try:
+            # Create a mosaic from all collected images, cropped to the specified geometry
+            composite = rt.mosaic(images, geometry=geometry)
+            
+            # Log that we're saving the mosaicked image to disk
+            logger.info(f"writing image to {filename}")
+            # Export the composite image to GeoTIFF format
+            composite.to_geotiff(expanduser(filename))
+            
+            return filename
+        except Exception as e:
+            logger.error(f"Error creating mosaic for {sensor} band {band} on {d_parsed}: {e}")
+            return None
+    
     # Begin main processing loop: iterate through dates (outermost loop)
-    # This ensures all bands/tiles for a date are processed together
     for d in all_dates:
         # Parse the date string into a date object for processing
         d_parsed = parser.parse(d).date()
         
         # Iterate through each band (middle loop)
         for band in bands:
-            # Initialize empty list to collect images from multiple tiles for this band/date
-            # This is used when creating mosaics from multiple tiles
-            images = []
             
-            # Iterate through each tile (innermost loop)
-            for tile in tiles:
-                # Check if this specific tile has data available for the current date
-                # Use .get() with default empty list to handle missing tiles safely
-                if d not in tile_dates.get(tile, []):
-                    # Skip this tile if no data is available for this date
-                    continue
+            # Handle different source modes
+            if source == "HLS":
+                # Original behavior: use combined HLS (backward compatible)
+                images = []
                 
-                # Log that we're about to extract data for this band/tile/date combination
-                logger.info(f"extracting band {band} for tile {tile} on date {d_parsed}")
-
-                # Wrap the data extraction in try-except to handle any errors gracefully
-                try:
-                    # Retrieve the HLS product (image data) for this specific combination
-                    image = HLS.product(
-                        product=band,           # The spectral band to retrieve
-                        date_UTC=d_parsed,      # The date of the imagery
-                        tile=tile               # The tile identifier
-                    )
+                for tile in tiles:
+                    # Check if this tile has data available for the current date
+                    available_dates = tile_sensor_dates.get(tile, {}).get("S30", []) + tile_sensor_dates.get(tile, {}).get("L30", [])
+                    if d not in available_dates:
+                        continue
                     
-                    # Check if geometry was NOT provided (tile-based processing)
-                    if geometry is None:
-                        # Create output filename for this individual tile
-                        # Format: HLS_<band>_<tile>_<YYYYMMDD>.tif
+                    logger.info(f"extracting band {band} for tile {tile} on date {d_parsed}")
+                    
+                    try:
+                        # Use the product() method which handles combining S30 and L30
+                        image = HLS.product(
+                            product=band,
+                            date_UTC=d_parsed,
+                            tile=tile
+                        )
+                        
+                        # Check if geometry was NOT provided (tile-based processing)
+                        if geometry is None:
+                            # Create output filename for this individual tile
+                            filename = join(
+                                output_directory,
+                                f"HLS_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
+                            )
+
+                            logger.info(f"writing image to {filename}")
+                            image.to_geotiff(expanduser(filename))
+                            output_filenames.append(filename)
+                        else:
+                            # Collect images for mosaic
+                            images.append(image)
+                    
+                    except Exception as e:
+                        logger.error(f"Error processing HLS band {band} for tile {tile} on {d_parsed}: {e}")
+                        continue
+                
+                # Create mosaic if geometry was provided
+                if geometry is not None and len(images) > 0:
+                    try:
                         filename = join(
                             output_directory,
-                            f"HLS_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
+                            f"HLS_{band}_{d_parsed.strftime('%Y%m%d')}.tif"
                         )
-
-                        # Log that we're saving the image to disk
+                        composite = rt.mosaic(images, geometry=geometry)
                         logger.info(f"writing image to {filename}")
-                        # Export the image to GeoTIFF format, expanding ~ to home directory if present
-                        image.to_geotiff(expanduser(filename))
-                        # Add the filename to the list of outputs for return value
+                        composite.to_geotiff(expanduser(filename))
                         output_filenames.append(filename)
-                    else:
-                        # If geometry was provided, collect images for mosaic instead of saving individually
-                        images.append(image)
-
-                # Catch any exception that occurs during processing
-                except Exception as e:
-                    # Log the error for debugging purposes
-                    logger.error(e)
-                    # Continue to next tile rather than stopping execution
-                    continue
-                
-            # After processing all tiles for this band/date combination
-            # Check if geometry was provided (indicating we should create a mosaic)
-            if geometry is not None:
-                # Create output filename for the mosaicked image
-                # Format: HLS_<band>_<YYYYMMDD>.tif (note: no tile identifier)
-                filename = join(
-                    output_directory,
-                    f"HLS_{band}_{d_parsed.strftime('%Y%m%d')}.tif"
-                )
-                
-                # Create a mosaic from all collected images, cropped to the specified geometry
-                composite = rt.mosaic(images, geometry=geometry)
-                
-                # Log that we're saving the mosaicked image to disk
-                logger.info(f"writing image to {filename}")
-                # Export the composite image to GeoTIFF format
-                composite.to_geotiff(expanduser(filename))
-                # Add the filename to the list of outputs for return value
-                output_filenames.append(filename)
+                    except Exception as e:
+                        logger.error(f"Error creating HLS mosaic for band {band} on {d_parsed}: {e}")
+            
+            elif source == "S30":
+                # Process only Sentinel-2
+                if geometry is None:
+                    for tile in tiles:
+                        available_dates = tile_sensor_dates.get(tile, {}).get("S30", [])
+                        if d not in available_dates:
+                            continue
+                        filename = _process_sensor_band("S30", d, d_parsed, band, tile)
+                        if filename:
+                            output_filenames.append(filename)
+                else:
+                    filename = _process_sensor_mosaic("S30", d, d_parsed, band)
+                    if filename:
+                        output_filenames.append(filename)
+            
+            elif source == "L30":
+                # Process only Landsat-8
+                if geometry is None:
+                    for tile in tiles:
+                        available_dates = tile_sensor_dates.get(tile, {}).get("L30", [])
+                        if d not in available_dates:
+                            continue
+                        filename = _process_sensor_band("L30", d, d_parsed, band, tile)
+                        if filename:
+                            output_filenames.append(filename)
+                else:
+                    filename = _process_sensor_mosaic("L30", d, d_parsed, band)
+                    if filename:
+                        output_filenames.append(filename)
+            
+            elif source == "both":
+                # Process S30 and L30 simultaneously
+                if geometry is None:
+                    for tile in tiles:
+                        for sensor in ["S30", "L30"]:
+                            available_dates = tile_sensor_dates.get(tile, {}).get(sensor, [])
+                            if d not in available_dates:
+                                continue
+                            filename = _process_sensor_band(sensor, d, d_parsed, band, tile)
+                            if filename:
+                                output_filenames.append(filename)
+                else:
+                    for sensor in ["S30", "L30"]:
+                        filename = _process_sensor_mosaic(sensor, d, d_parsed, band)
+                        if filename:
+                            output_filenames.append(filename)
     
     # Return the complete list of all output filenames that were created
     return output_filenames
