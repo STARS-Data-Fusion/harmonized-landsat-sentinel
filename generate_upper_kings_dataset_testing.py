@@ -20,7 +20,7 @@ end_date_UTC = "2022-08-02"
 download_directory = "~/data/HLS_download"
 
 # Output directory
-output_directory = "~/data/Kings Canyon HLS 2023"
+output_directory = "~/data/Kings Canyon HLS"
 
 # Upper Kings area of interest
 gdf = gpd.read_file("upper_kings.kml")

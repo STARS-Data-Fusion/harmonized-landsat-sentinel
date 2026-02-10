@@ -2,6 +2,8 @@
 from typing import Optional, Union, List
 # Import path manipulation utilities for joining paths and expanding user home directory
 from os.path import join, expanduser
+# Import makedirs for creating directories
+from os import makedirs
 # Import logging module for tracking execution and debugging
 import logging
 # Import date and datetime classes for handling temporal data
@@ -433,19 +435,27 @@ def generate_HLS_timeseries(
                         output_filenames.append(filename)
             
             elif source == "both":
-                # Process S30 and L30 simultaneously
+                # Process S30 and L30 simultaneously, writing to separate subdirectories
+                # Create sensor-specific subdirectories
+                s30_output_dir = join(output_directory, "S30")
+                l30_output_dir = join(output_directory, "L30")
+                makedirs(expanduser(s30_output_dir), exist_ok=True)
+                makedirs(expanduser(l30_output_dir), exist_ok=True)
+                
                 if geometry is None:
                     for tile in tiles:
                         for sensor in ["S30", "L30"]:
                             available_dates = tile_sensor_dates.get(tile, {}).get(sensor, [])
                             if d not in available_dates:
                                 continue
-                            filename = _process_sensor_band(sensor, d, d_parsed, band, tile, HLS, output_directory)
+                            sensor_output_dir = s30_output_dir if sensor == "S30" else l30_output_dir
+                            filename = _process_sensor_band(sensor, d, d_parsed, band, tile, HLS, sensor_output_dir)
                             if filename:
                                 output_filenames.append(filename)
                 else:
                     for sensor in ["S30", "L30"]:
-                        filename = _process_sensor_mosaic(sensor, d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, output_directory)
+                        sensor_output_dir = s30_output_dir if sensor == "S30" else l30_output_dir
+                        filename = _process_sensor_mosaic(sensor, d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, sensor_output_dir)
                         if filename:
                             output_filenames.append(filename)
     
