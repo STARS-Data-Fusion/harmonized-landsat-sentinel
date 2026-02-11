@@ -2,8 +2,9 @@
 from typing import Optional, Union, List
 # Import path manipulation utilities for joining paths and expanding user home directory
 from os.path import join, expanduser
-# Import makedirs for creating directories
+# Import makedirs and dirname for creating directories
 from os import makedirs
+import os
 # Import logging module for tracking execution and debugging
 import logging
 # Import date and datetime classes for handling temporal data
@@ -37,6 +38,17 @@ BANDS = [
 
 # Create a logger instance for this module to track execution progress
 logger = logging.getLogger(__name__)
+
+def _ensure_directory_exists(filepath: str) -> None:
+    """
+    Ensure the directory for a filepath exists, creating it if necessary.
+    
+    Args:
+        filepath (str): The full path to the file (directory will be extracted)
+    """
+    directory = os.path.dirname(expanduser(filepath))
+    if directory:  # Only create if there's a directory component
+        makedirs(directory, exist_ok=True)
 
 def _process_sensor_band(
     sensor: str,
@@ -85,6 +97,9 @@ def _process_sensor_band(
             f"{sensor}_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
         )
 
+        # Ensure output directory exists before writing
+        _ensure_directory_exists(filename)
+        
         # Log that we're saving the image to disk
         logger.info(f"writing image to {filename}")
         # Export the image to GeoTIFF format
@@ -169,6 +184,9 @@ def _process_sensor_mosaic(
     try:
         # Create a mosaic from all collected images, cropped to the specified geometry
         composite = rt.mosaic(images, geometry=geometry)
+        
+        # Ensure output directory exists before writing
+        _ensure_directory_exists(filename)
         
         # Log that we're saving the mosaicked image to disk
         logger.info(f"writing image to {filename}")
@@ -349,10 +367,9 @@ def generate_HLS_timeseries(
         
         # Iterate through each band (middle loop)
         for band in bands:
-            # Create band-specific subdirectory (not needed for "both" mode, which handles its own structure)
+            # Define band-specific subdirectory path (directory will be created only when needed)
             if source != "both":
                 band_output_dir = join(output_directory, band)
-                makedirs(expanduser(band_output_dir), exist_ok=True)
             
             # Handle different source modes
             if source == "HLS":
@@ -383,6 +400,9 @@ def generate_HLS_timeseries(
                                 f"HLS_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
                             )
 
+                            # Ensure output directory exists before writing
+                            _ensure_directory_exists(filename)
+                            
                             logger.info(f"writing image to {filename}")
                             image.to_geotiff(expanduser(filename))
                             output_filenames.append(filename)
@@ -402,6 +422,10 @@ def generate_HLS_timeseries(
                             f"HLS_{band}_{d_parsed.strftime('%Y%m%d')}.tif"
                         )
                         composite = rt.mosaic(images, geometry=geometry)
+                        
+                        # Ensure output directory exists before writing
+                        _ensure_directory_exists(filename)
+                        
                         logger.info(f"writing image to {filename}")
                         composite.to_geotiff(expanduser(filename))
                         output_filenames.append(filename)
@@ -440,11 +464,9 @@ def generate_HLS_timeseries(
             
             elif source == "both":
                 # Process S30 and L30 simultaneously, writing to separate subdirectories under band directory
-                # Create band-specific subdirectories under sensor directories
+                # Define band-specific subdirectories under sensor directories (will be created only when needed)
                 s30_output_dir = join(output_directory, "S30", band)
                 l30_output_dir = join(output_directory, "L30", band)
-                makedirs(expanduser(s30_output_dir), exist_ok=True)
-                makedirs(expanduser(l30_output_dir), exist_ok=True)
                 
                 if geometry is None:
                     for tile in tiles:
