@@ -349,9 +349,10 @@ def generate_HLS_timeseries(
         
         # Iterate through each band (middle loop)
         for band in bands:
-            # Create band-specific subdirectory
-            band_output_dir = join(output_directory, band)
-            makedirs(expanduser(band_output_dir), exist_ok=True)
+            # Create band-specific subdirectory (not needed for "both" mode, which handles its own structure)
+            if source != "both":
+                band_output_dir = join(output_directory, band)
+                makedirs(expanduser(band_output_dir), exist_ok=True)
             
             # Handle different source modes
             if source == "HLS":
@@ -439,9 +440,9 @@ def generate_HLS_timeseries(
             
             elif source == "both":
                 # Process S30 and L30 simultaneously, writing to separate subdirectories under band directory
-                # Create sensor-specific subdirectories under band directory
-                s30_output_dir = join(band_output_dir, "S30")
-                l30_output_dir = join(band_output_dir, "L30")
+                # Create band-specific subdirectories under sensor directories
+                s30_output_dir = join(output_directory, "S30", band)
+                l30_output_dir = join(output_directory, "L30", band)
                 makedirs(expanduser(s30_output_dir), exist_ok=True)
                 makedirs(expanduser(l30_output_dir), exist_ok=True)
                 
