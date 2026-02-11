@@ -349,6 +349,9 @@ def generate_HLS_timeseries(
         
         # Iterate through each band (middle loop)
         for band in bands:
+            # Create band-specific subdirectory
+            band_output_dir = join(output_directory, band)
+            makedirs(expanduser(band_output_dir), exist_ok=True)
             
             # Handle different source modes
             if source == "HLS":
@@ -375,7 +378,7 @@ def generate_HLS_timeseries(
                         if geometry is None:
                             # Create output filename for this individual tile
                             filename = join(
-                                output_directory,
+                                band_output_dir,
                                 f"HLS_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
                             )
 
@@ -394,7 +397,7 @@ def generate_HLS_timeseries(
                 if geometry is not None and len(images) > 0:
                     try:
                         filename = join(
-                            output_directory,
+                            band_output_dir,
                             f"HLS_{band}_{d_parsed.strftime('%Y%m%d')}.tif"
                         )
                         composite = rt.mosaic(images, geometry=geometry)
@@ -411,11 +414,11 @@ def generate_HLS_timeseries(
                         available_dates = tile_sensor_dates.get(tile, {}).get("S30", [])
                         if d not in available_dates:
                             continue
-                        filename = _process_sensor_band("S30", d, d_parsed, band, tile, HLS, output_directory)
+                        filename = _process_sensor_band("S30", d, d_parsed, band, tile, HLS, band_output_dir)
                         if filename:
                             output_filenames.append(filename)
                 else:
-                    filename = _process_sensor_mosaic("S30", d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, output_directory)
+                    filename = _process_sensor_mosaic("S30", d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, band_output_dir)
                     if filename:
                         output_filenames.append(filename)
             
@@ -426,19 +429,19 @@ def generate_HLS_timeseries(
                         available_dates = tile_sensor_dates.get(tile, {}).get("L30", [])
                         if d not in available_dates:
                             continue
-                        filename = _process_sensor_band("L30", d, d_parsed, band, tile, HLS, output_directory)
+                        filename = _process_sensor_band("L30", d, d_parsed, band, tile, HLS, band_output_dir)
                         if filename:
                             output_filenames.append(filename)
                 else:
-                    filename = _process_sensor_mosaic("L30", d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, output_directory)
+                    filename = _process_sensor_mosaic("L30", d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, band_output_dir)
                     if filename:
                         output_filenames.append(filename)
             
             elif source == "both":
-                # Process S30 and L30 simultaneously, writing to separate subdirectories
-                # Create sensor-specific subdirectories
-                s30_output_dir = join(output_directory, "S30")
-                l30_output_dir = join(output_directory, "L30")
+                # Process S30 and L30 simultaneously, writing to separate subdirectories under band directory
+                # Create sensor-specific subdirectories under band directory
+                s30_output_dir = join(band_output_dir, "S30")
+                l30_output_dir = join(band_output_dir, "L30")
                 makedirs(expanduser(s30_output_dir), exist_ok=True)
                 makedirs(expanduser(l30_output_dir), exist_ok=True)
                 
