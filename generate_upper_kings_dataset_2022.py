@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format='%(name)s - %(levelname)s - %(mes
 
 # Date range
 start_date_UTC = "2022-08-01"
-end_date_UTC = "2022-08-02"
+end_date_UTC = "2022-12-31"
 
 # Download directory
 download_directory = "~/data/HLS_download"

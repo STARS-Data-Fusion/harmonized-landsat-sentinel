@@ -13,8 +13,8 @@ from harmonized_landsat_sentinel import generate_HLS_timeseries
 logging.basicConfig(level=logging.INFO, format='%(name)s - %(levelname)s - %(message)s')
 
 # Date range
-start_date_UTC = "2022-08-01"
-end_date_UTC = "2022-08-02"
+start_date_UTC = "2024-01-01"
+end_date_UTC = "2024-12-31"
 
 # Download directory
 download_directory = "~/data/HLS_download"
