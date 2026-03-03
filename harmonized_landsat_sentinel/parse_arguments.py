@@ -49,4 +49,11 @@ def parse_arguments(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "-d", "--directory", type=str, help="Directory to use", default=None
     )
 
+    # Skip writing outputs where all pixels are NaN
+    parser.add_argument(
+        "--skip-all-nan",
+        action="store_true",
+        help="Skip writing output images when all pixels are NaN",
+    )
+
     return parser.parse_args(argv)

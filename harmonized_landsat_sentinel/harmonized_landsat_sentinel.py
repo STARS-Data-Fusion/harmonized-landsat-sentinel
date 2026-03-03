@@ -26,8 +26,19 @@ __author__ = "Gregory H. Halverson, Evan Davis"
 
 logger = logging.getLogger(__name__)
 
-try:
-    harmonized_landsat_sentinel = HLS2Connection()
-except Exception as e:
-    logging.warning(f"Failed to initialize HLS2EarthAccessConnection: {e}")
-    harmonized_landsat_sentinel = None
+_hls_connection = None
+
+
+def get_harmonized_landsat_sentinel() -> HLS2Connection:
+    global _hls_connection
+    if _hls_connection is None:
+        _hls_connection = HLS2Connection()
+    return _hls_connection
+
+
+class _LazyHLSConnection:
+    def __getattr__(self, name):
+        return getattr(get_harmonized_landsat_sentinel(), name)
+
+
+harmonized_landsat_sentinel = _LazyHLSConnection()

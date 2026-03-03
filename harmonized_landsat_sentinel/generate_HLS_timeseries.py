@@ -6,6 +6,8 @@ from os.path import join, expanduser
 from os import makedirs
 # Import logging module for tracking execution and debugging
 import logging
+# Import NumPy for NaN checks before writing output rasters
+import numpy as np
 # Import date and datetime classes for handling temporal data
 from datetime import date, datetime
 # Import parser for flexible date string parsing
@@ -38,6 +40,43 @@ BANDS = [
 # Create a logger instance for this module to track execution progress
 logger = logging.getLogger(__name__)
 
+def _is_all_nan_image(image) -> bool:
+    """
+    Return True when image pixel values are entirely NaN.
+
+    If pixel extraction fails for any reason, return False so writing behavior
+    remains backward compatible.
+    """
+    try:
+        image_array = np.asarray(image)
+    except Exception as e:
+        logger.debug(f"Unable to inspect raster values for NaN-only check: {e}")
+        return False
+
+    if image_array.size == 0:
+        return True
+
+    try:
+        return bool(np.isnan(image_array).all())
+    except Exception as e:
+        logger.debug(f"NaN-only check failed for raster: {e}")
+        return False
+
+def _write_geotiff_if_valid(image, filename: str, skip_all_nan: bool = False) -> Optional[str]:
+    """
+    Write a raster to GeoTIFF, optionally skipping all-NaN images.
+
+    Returns:
+        Optional[str]: The filename if written, else None.
+    """
+    if skip_all_nan and _is_all_nan_image(image):
+        logger.info(f"skipping all-NaN image: {filename}")
+        return None
+
+    logger.info(f"writing image to {filename}")
+    image.to_geotiff(expanduser(filename))
+    return filename
+
 def _process_sensor_band(
     sensor: str,
     d: str,
@@ -45,7 +84,8 @@ def _process_sensor_band(
     band: str,
     tile: str,
     HLS,
-    output_directory: str
+    output_directory: str,
+    skip_all_nan: bool = False
 ) -> Optional[str]:
     """
     Helper to extract and save a single band for a specific sensor.
@@ -84,13 +124,7 @@ def _process_sensor_band(
             output_directory,
             f"{sensor}_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
         )
-
-        # Log that we're saving the image to disk
-        logger.info(f"writing image to {filename}")
-        # Export the image to GeoTIFF format
-        image.to_geotiff(expanduser(filename))
-        
-        return filename
+        return _write_geotiff_if_valid(image=image, filename=filename, skip_all_nan=skip_all_nan)
         
     except Exception as e:
         logger.error(f"Error processing {sensor} band {band} for tile {tile} on {d_parsed}: {e}")
@@ -105,7 +139,8 @@ def _process_sensor_mosaic(
     tile_sensor_dates: dict,
     HLS,
     geometry: RasterGeometry,
-    output_directory: str
+    output_directory: str,
+    skip_all_nan: bool = False
 ) -> Optional[str]:
     """
     Helper to extract and mosaic a band across tiles for a specific sensor.
@@ -170,12 +205,7 @@ def _process_sensor_mosaic(
         # Create a mosaic from all collected images, cropped to the specified geometry
         composite = rt.mosaic(images, geometry=geometry)
         
-        # Log that we're saving the mosaicked image to disk
-        logger.info(f"writing image to {filename}")
-        # Export the composite image to GeoTIFF format
-        composite.to_geotiff(expanduser(filename))
-        
-        return filename
+        return _write_geotiff_if_valid(image=composite, filename=filename, skip_all_nan=skip_all_nan)
     except Exception as e:
         logger.error(f"Error creating mosaic for {sensor} band {band} on {d_parsed}: {e}")
         return None
@@ -188,7 +218,8 @@ def generate_HLS_timeseries(
     end_date_UTC: Optional[Union[str, date]] = None,            # Ending date for timeseries (string or date object)
     download_directory: Optional[str] = None,                   # Directory for caching downloaded HLS data
     output_directory: Optional[str] = None,                     # Directory for saving processed output files
-    source: str = "HLS") -> List[str]:                           # Data source: "HLS" (combined, default), "S30" (Sentinel-2), "L30" (Landsat-8), or "both" (separate streams)
+    source: str = "HLS",                                        # Data source: "HLS" (combined, default), "S30" (Sentinel-2), "L30" (Landsat-8), or "both" (separate streams)
+    skip_all_nan: bool = False) -> List[str]:                   # Skip writing outputs when all pixels are NaN
     """
     Produce a timeseries of HLS data for the specified parameters.
 
@@ -205,6 +236,7 @@ def generate_HLS_timeseries(
             - "S30": Sentinel-2 only
             - "L30": Landsat-8 only
             - "both": Separate timeseries for S30 and L30 simultaneously
+        skip_all_nan (bool): If True, do not write images where all pixels are NaN.
 
     Returns:
         List[str]: List of output filenames that were created.
@@ -271,6 +303,8 @@ def generate_HLS_timeseries(
     logger.info(f"  End date: {end_date_UTC}")
     # Log the data source
     logger.info(f"  Source: {source}")
+    # Log whether all-NaN outputs should be skipped
+    logger.info(f"  Skip all-NaN images: {skip_all_nan}")
     
     # Check if a custom download directory was specified
     if download_directory is None:
@@ -382,10 +416,13 @@ def generate_HLS_timeseries(
                                 band_output_dir,
                                 f"HLS_{band}_{tile}_{d_parsed.strftime('%Y%m%d')}.tif"
                             )
-
-                            logger.info(f"writing image to {filename}")
-                            image.to_geotiff(expanduser(filename))
-                            output_filenames.append(filename)
+                            written_filename = _write_geotiff_if_valid(
+                                image=image,
+                                filename=filename,
+                                skip_all_nan=skip_all_nan
+                            )
+                            if written_filename:
+                                output_filenames.append(written_filename)
                         else:
                             # Collect images for mosaic
                             images.append(image)
@@ -402,9 +439,13 @@ def generate_HLS_timeseries(
                             f"HLS_{band}_{d_parsed.strftime('%Y%m%d')}.tif"
                         )
                         composite = rt.mosaic(images, geometry=geometry)
-                        logger.info(f"writing image to {filename}")
-                        composite.to_geotiff(expanduser(filename))
-                        output_filenames.append(filename)
+                        written_filename = _write_geotiff_if_valid(
+                            image=composite,
+                            filename=filename,
+                            skip_all_nan=skip_all_nan
+                        )
+                        if written_filename:
+                            output_filenames.append(written_filename)
                     except Exception as e:
                         logger.error(f"Error creating HLS mosaic for band {band} on {d_parsed}: {e}")
             
@@ -415,11 +456,11 @@ def generate_HLS_timeseries(
                         available_dates = tile_sensor_dates.get(tile, {}).get("S30", [])
                         if d not in available_dates:
                             continue
-                        filename = _process_sensor_band("S30", d, d_parsed, band, tile, HLS, band_output_dir)
+                        filename = _process_sensor_band("S30", d, d_parsed, band, tile, HLS, band_output_dir, skip_all_nan=skip_all_nan)
                         if filename:
                             output_filenames.append(filename)
                 else:
-                    filename = _process_sensor_mosaic("S30", d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, band_output_dir)
+                    filename = _process_sensor_mosaic("S30", d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, band_output_dir, skip_all_nan=skip_all_nan)
                     if filename:
                         output_filenames.append(filename)
             
@@ -430,11 +471,11 @@ def generate_HLS_timeseries(
                         available_dates = tile_sensor_dates.get(tile, {}).get("L30", [])
                         if d not in available_dates:
                             continue
-                        filename = _process_sensor_band("L30", d, d_parsed, band, tile, HLS, band_output_dir)
+                        filename = _process_sensor_band("L30", d, d_parsed, band, tile, HLS, band_output_dir, skip_all_nan=skip_all_nan)
                         if filename:
                             output_filenames.append(filename)
                 else:
-                    filename = _process_sensor_mosaic("L30", d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, band_output_dir)
+                    filename = _process_sensor_mosaic("L30", d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, band_output_dir, skip_all_nan=skip_all_nan)
                     if filename:
                         output_filenames.append(filename)
             
@@ -453,13 +494,13 @@ def generate_HLS_timeseries(
                             if d not in available_dates:
                                 continue
                             sensor_output_dir = s30_output_dir if sensor == "S30" else l30_output_dir
-                            filename = _process_sensor_band(sensor, d, d_parsed, band, tile, HLS, sensor_output_dir)
+                            filename = _process_sensor_band(sensor, d, d_parsed, band, tile, HLS, sensor_output_dir, skip_all_nan=skip_all_nan)
                             if filename:
                                 output_filenames.append(filename)
                 else:
                     for sensor in ["S30", "L30"]:
                         sensor_output_dir = s30_output_dir if sensor == "S30" else l30_output_dir
-                        filename = _process_sensor_mosaic(sensor, d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, sensor_output_dir)
+                        filename = _process_sensor_mosaic(sensor, d, d_parsed, band, tiles, tile_sensor_dates, HLS, geometry, sensor_output_dir, skip_all_nan=skip_all_nan)
                         if filename:
                             output_filenames.append(filename)
     
