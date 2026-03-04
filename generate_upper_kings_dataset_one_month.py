@@ -22,12 +22,12 @@ download_directory = "~/data/HLS_download"
 # Output directory
 output_directory = "~/data/Kings_Canyon_HLS"
 
-# Upper Kings area of interest
-gdf = gpd.read_file("upper_kings.kml")
+# Arrow Peak area of interest
+gdf = gpd.read_file("arrow_peak.geojson")
 
 gdf.geometry[0]
 
-bbox_UTM = rt.Polygon(gdf.geometry.union_all()).UTM.bbox
+bbox_UTM = rt.Polygon(gdf.unary_union).UTM.bbox
 
 # Log into earthaccess using netrc credentials
 earthaccess.login(strategy="netrc", persist=True)
