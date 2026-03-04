@@ -25,10 +25,11 @@ def main(argv: Optional[List[str]] = None) -> None:
     # Call the timeseries function with parsed arguments
     generate_HLS_timeseries(
         bands=args.band,
-        tile=args.tile,
+        tiles=args.tile,
         start_date_UTC=args.start,
         end_date_UTC=args.end,
-        download_directory=args.directory
+        download_directory=args.directory,
+        skip_all_nan=args.skip_all_nan,
     )
 
 if __name__ == "__main__":

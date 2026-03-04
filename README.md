@@ -18,6 +18,29 @@ This package is available on PyPi: [https://pypi.org/project/harmonized-landsat-
 pip install harmonized-landsat-sentinel
 ```
 
+## Skip all-NaN outputs
+
+When cloud masks and nodata filtering produce rasters with no valid pixels, you can skip writing those files:
+
+```python
+from harmonized_landsat_sentinel import generate_HLS_timeseries
+
+generate_HLS_timeseries(
+   start_date_UTC="2022-08-01",
+   end_date_UTC="2022-08-02",
+   geometry=grid,
+   output_directory="~/data/Kings_Canyon_HLS",
+   source="both",
+   skip_all_nan=True,
+)
+```
+
+CLI:
+
+```
+hls --start 2022-08-01 --end 2022-08-02 --skip-all-nan
+```
+
 ## References
 
 If you use this package to access or analyze the Harmonized Landsat Sentinel (HLS) dataset, please cite the following datasets and research articles:
