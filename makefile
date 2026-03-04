@@ -1,5 +1,6 @@
 ENVIRONMENT_NAME = harmonized-landsat-sentinel
 DOCKER_IMAGE_NAME = $(ENVIRONMENT_NAME)
+PYTHON_VERSION = 3.14
 
 clean:
 	rm -rf *.o *.out *.log
@@ -24,7 +25,7 @@ dist:
 	make twine-upload
 
 remove-environment:
-	mamba env remove -y -n rasters
+	mamba env remove -y -n ${ENVIRONMENT_NAME}
 
 install:
 	pip install -e .[dev]
@@ -37,7 +38,7 @@ reinstall:
 	make install
 
 environment:
-	mamba create -y -n $(ENVIRONMENT_NAME) -c conda-forge python=3.10
+	mamba create -y -n $(ENVIRONMENT_NAME) -c conda-forge python=$(PYTHON_VERSION)
 
 colima-start:
 	colima start -m 16 -a x86_64 -d 100 
