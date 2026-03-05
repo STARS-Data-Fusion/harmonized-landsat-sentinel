@@ -24,7 +24,7 @@ dependencies = [
     "pytest",
     "python-dateutil",
     "rasterio",
-    "rasters",
+    "rasters>=1.18.0",
     "requests",
     "sentinel-tiles",
     "shapely"
