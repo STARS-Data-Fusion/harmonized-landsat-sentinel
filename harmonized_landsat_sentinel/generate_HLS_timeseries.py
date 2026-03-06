@@ -14,8 +14,8 @@ from datetime import date, datetime
 from dateutil import parser
 # Import sentinel_tiles for mapping geometries to Sentinel-2 tile identifiers
 from sentinel_tiles import sentinel_tiles
-# Import RasterGeometry class for handling geospatial raster operations
-from rasters import RasterGeometry
+# Import RasterGeometry and BBox classes for handling geospatial operations
+from rasters import RasterGeometry, BBox
 # Import rasters module with alias for mosaic operations
 import rasters as rt
 
@@ -138,7 +138,7 @@ def _process_sensor_mosaic(
     tiles: List[str],
     tile_sensor_dates: dict,
     HLS,
-    geometry: RasterGeometry,
+    geometry: Union[RasterGeometry, BBox],
     output_directory: str,
     skip_all_nan: bool = False
 ) -> Optional[str]:
@@ -153,7 +153,7 @@ def _process_sensor_mosaic(
         tiles (List[str]): List of tile identifiers
         tile_sensor_dates (dict): Dictionary mapping tiles to available dates per sensor
         HLS: HLS connection object
-        geometry (RasterGeometry): Geographic area of interest
+        geometry (Union[RasterGeometry, BBox]): Geographic area of interest
         output_directory (str): Directory to save output files
     
     Returns:
@@ -213,7 +213,7 @@ def _process_sensor_mosaic(
 def generate_HLS_timeseries(
     bands: Optional[Union[List[str], str]] = None,              # Spectral band(s) to retrieve (single string or list)
     tiles: Optional[Union[List[str], str]] = None,              # HLS tile identifier(s) (e.g., "10SEG")
-    geometry: Optional[RasterGeometry] = None,                  # Geographic area of interest for automatic tile selection
+    geometry: Optional[Union[RasterGeometry, BBox]] = None,     # Geographic area of interest for automatic tile selection
     start_date_UTC: Optional[Union[str, date]] = None,          # Starting date for timeseries (string or date object)
     end_date_UTC: Optional[Union[str, date]] = None,            # Ending date for timeseries (string or date object)
     download_directory: Optional[str] = None,                   # Directory for caching downloaded HLS data
@@ -226,7 +226,7 @@ def generate_HLS_timeseries(
     Args:
         bands (Optional[Union[List[str], str]]): Spectral band(s) to retrieve (single string or list).
         tiles (Optional[Union[List[str], str]]): HLS tile identifier(s) (e.g., "10SEG" or ["10SEG", "10TEL"]).
-        geometry (Optional[RasterGeometry]): Geographic area of interest for automatic tile selection.
+        geometry (Optional[Union[RasterGeometry, BBox]]): Geographic area of interest for automatic tile selection.
         start_date_UTC (Optional[Union[str, date]]): Start date as YYYY-MM-DD string or date object.
         end_date_UTC (Optional[Union[str, date]]): End date as YYYY-MM-DD string or date object.
         download_directory (Optional[str]): Directory to save or read data.
@@ -277,7 +277,18 @@ def generate_HLS_timeseries(
     if tiles is None and geometry is not None:
         # Automatically determine which Sentinel-2 tiles cover the geometry
         # This converts the geometry boundary to lat/lon and finds intersecting tiles
-        tiles = sentinel_tiles.tiles(target_geometry=geometry.boundary_latlon.geometry)
+        # Handle different geometry types (RasterGeometry, BBox, etc.)
+        if hasattr(geometry, 'boundary_latlon'):
+            # For geometries with boundary_latlon attribute (RasterGeometry, newer BBox)
+            target_geom = geometry.boundary_latlon.geometry
+        elif hasattr(geometry, 'polygon'):
+            # For BBox objects without boundary_latlon (older versions)
+            target_geom = geometry.polygon.latlon.geometry
+        else:
+            # Fallback: assume geometry is already in a usable format
+            target_geom = geometry if hasattr(geometry, 'geometry') else geometry
+        
+        tiles = sentinel_tiles.tiles(target_geometry=target_geom)
 
     # Handle case where tiles might still be None after geometry processing
     if tiles is None:

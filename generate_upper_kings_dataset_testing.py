@@ -33,7 +33,7 @@ gdf = gpd.read_file("arrow_peak.geojson")
 gdf.geometry[0]
 
 logger.info("Building UTM bounding box and raster grid")
-bbox_UTM = rt.Polygon(gdf.unary_union).UTM.bbox
+bbox_UTM = rt.Polygon(gdf.union_all()).UTM.bbox
 
 grid = rt.RasterGrid.from_bbox(bbox_UTM, cell_size=60, crs=bbox_UTM.crs)
 
