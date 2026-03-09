@@ -14,8 +14,8 @@ from datetime import date, datetime
 from dateutil import parser
 # Import sentinel_tiles for mapping geometries to Sentinel-2 tile identifiers
 from sentinel_tiles import sentinel_tiles
-# Import RasterGeometry and BBox classes for handling geospatial operations
-from rasters import RasterGeometry, BBox
+# Import RasterGeometry, BBox, and RasterGrid classes for handling geospatial operations
+from rasters import RasterGeometry, BBox, RasterGrid
 # Import rasters module with alias for mosaic operations
 import rasters as rt
 
@@ -202,8 +202,15 @@ def _process_sensor_mosaic(
     )
     
     try:
+        # If geometry is a BBox, convert it to a RasterGrid using the first image's resolution
+        mosaic_geometry = geometry
+        if isinstance(geometry, BBox):
+            # Use the first image's cell size to create a grid from the bounding box
+            cell_size = images[0].geometry.cell_size
+            mosaic_geometry = RasterGrid.from_bbox(bbox=geometry, cell_size=cell_size)
+        
         # Create a mosaic from all collected images, cropped to the specified geometry
-        composite = rt.mosaic(images, geometry=geometry)
+        composite = rt.mosaic(images, geometry=mosaic_geometry)
         
         return _write_geotiff_if_valid(image=composite, filename=filename, skip_all_nan=skip_all_nan)
     except Exception as e:
@@ -449,7 +456,15 @@ def generate_HLS_timeseries(
                             band_output_dir,
                             f"HLS_{band}_{d_parsed.strftime('%Y%m%d')}.tif"
                         )
-                        composite = rt.mosaic(images, geometry=geometry)
+                        
+                        # If geometry is a BBox, convert it to a RasterGrid using the first image's resolution
+                        mosaic_geometry = geometry
+                        if isinstance(geometry, BBox):
+                            # Use the first image's cell size to create a grid from the bounding box
+                            cell_size = images[0].geometry.cell_size
+                            mosaic_geometry = RasterGrid.from_bbox(bbox=geometry, cell_size=cell_size)
+                        
+                        composite = rt.mosaic(images, geometry=mosaic_geometry)
                         written_filename = _write_geotiff_if_valid(
                             image=composite,
                             filename=filename,
