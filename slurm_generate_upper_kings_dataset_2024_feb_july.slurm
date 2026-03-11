@@ -15,7 +15,7 @@ source $(conda info --base)/etc/profile.d/conda.sh
 conda activate harmonized-landsat-sentinel
 
 # Navigate to project directory
-cd /Users/halverso/Projects/harmonized-landsat-sentinel
+cd $HOME/data/harmonized-landsat-sentinel
 
 # Run the dataset generation script
 echo "Starting HLS dataset generation for 2024 February though July..."
