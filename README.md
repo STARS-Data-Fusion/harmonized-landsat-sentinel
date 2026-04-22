@@ -6,7 +6,6 @@
 [gregory.h.halverson@jpl.nasa.gov](mailto:gregory.h.halverson@jpl.nasa.gov)<br>
 NASA Jet Propulsion Laboratory 329G
 
-
 Margaret C. Johnson (she/her)<br>
 [maggie.johnson@jpl.nasa.gov](mailto:maggie.johnson@jpl.nasa.gov)<br>
 NASA Jet Propulsion Laboratory 
@@ -45,6 +44,29 @@ CLI:
 ```
 hls --start 2022-08-01 --end 2022-08-02 --skip-all-nan
 ```
+
+## How to Cite This Package
+
+If you use this software in a publication, please cite the specific release/version you used.
+
+Suggested software citation:
+
+- Halverson, G. H., Johnson, M. C., & Davis, E. (2026). *harmonized-landsat-sentinel* (Version 2.3.0) [Computer software]. GitHub. https://github.com/STARS-Data-Fusion/harmonized-landsat-sentinel
+
+LaTeX (BibTeX) entry:
+
+```bibtex
+@software{halverson2026hls,
+   author  = {Halverson, Gregory H. and Johnson, Margaret C. and Davis, Evan},
+   title   = {{harmonized-landsat-sentinel}},
+   year    = {2026},
+   version = {2.3.0},
+   url     = {https://github.com/STARS-Data-Fusion/harmonized-landsat-sentinel},
+   note    = {Computer software}
+}
+```
+
+For machine-readable citation metadata, see `CITATION.cff` in this repository.
 
 ## References
 
