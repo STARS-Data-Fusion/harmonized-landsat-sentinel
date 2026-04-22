@@ -6,6 +6,11 @@
 [gregory.h.halverson@jpl.nasa.gov](mailto:gregory.h.halverson@jpl.nasa.gov)<br>
 NASA Jet Propulsion Laboratory 329G
 
+
+Margaret C. Johnson (she/her)<br>
+[maggie.johnson@jpl.nasa.gov](mailto:maggie.johnson@jpl.nasa.gov)<br>
+NASA Jet Propulsion Laboratory 
+
 [Evan Davis](https://github.com/evandjpl) (he/him)<br>
 [evan.w.davis@jpl.nasa.gov](mailto:evan.w.davis@jpl.nasa.gov)<br>
 NASA Jet Propulsion Laboratory 397K
