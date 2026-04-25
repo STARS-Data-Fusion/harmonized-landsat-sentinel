@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "kings_canyon_ravine",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "id": 2 }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ -118.757559481404385, 36.828982339984677 ], [ -118.664411124043752, 36.829727922127816 ], [ -118.665342607617333, 36.767073698574386 ], [ -118.756627997830776, 36.768566061355394 ], [ -118.757559481404385, 36.828982339984677 ] ] ] ] } },
+{ "type": "Feature", "properties": { "id": 1 }, "geometry": { "type": "MultiPolygon", "coordinates": [ ] } }
+]
+}

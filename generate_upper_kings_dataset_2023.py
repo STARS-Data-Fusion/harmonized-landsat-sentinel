@@ -20,10 +20,10 @@ end_date_UTC = "2023-12-31"
 download_directory = "~/data/HLS_download"
 
 # Output directory
-output_directory = "~/data/Kings_Canyon_HLS"
+output_directory = "~/data/Kings_Canyon_Ravine_HLS"
 
 # Arrow Peak area of interest
-gdf = gpd.read_file("arrow_peak.geojson")
+gdf = gpd.read_file("kings_canyon_ravine.geojson")
 
 gdf.geometry[0]
 
