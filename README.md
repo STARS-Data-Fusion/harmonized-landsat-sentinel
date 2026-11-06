@@ -1,7 +1,7 @@
 # Harmonized Landsat Sentinel (HLS) Python Search and Download Utility
 
 [![CI](https://github.com/STARS-Data-Fusion/harmonized-landsat-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/STARS-Data-Fusion/harmonized-landsat-sentinel/actions/workflows/ci.yml)
-
+<!-- 
 [Gregory H. Halverson](https://github.com/gregory-halverson-jpl) (they/them)<br>
 [gregory.h.halverson@jpl.nasa.gov](mailto:gregory.h.halverson@jpl.nasa.gov)<br>
 NASA Jet Propulsion Laboratory 329G
@@ -13,7 +13,7 @@ NASA Jet Propulsion Laboratory
 [Evan Davis](https://github.com/evandjpl) (he/him)<br>
 [evan.w.davis@jpl.nasa.gov](mailto:evan.w.davis@jpl.nasa.gov)<br>
 NASA Jet Propulsion Laboratory 397K
-
+-->
 ## Installation
 
 This package is available on PyPi: [https://pypi.org/project/harmonized-landsat-sentinel](https://pypi.org/project/harmonized-landsat-sentinel)
