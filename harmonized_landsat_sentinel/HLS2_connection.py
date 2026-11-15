@@ -1,25 +1,33 @@
-from typing import Union, List, Set
-
+from typing import Union, List, Set, Callable, Any
+import os
+import glob
+import shutil
+import tempfile
 from time import sleep
 from traceback import format_exception
-from os.path import abspath, expanduser, join, exists
+from os.path import abspath, expanduser, join, exists, basename, isdir
 import logging
 from datetime import date, datetime, time, timedelta
 from dateutil import parser
 
 import pandas as pd
-
-import earthaccess
-
-import colored_logging as cl
-
 import numpy as np
+import earthaccess
+import colored_logging as cl
 
 import rasters as rt
 from rasters import Raster, RasterGeometry
 
-from .login import login
+try:
+    import rasterio
+    from rasterio.errors import RasterioIOError
+    from rasterio.windows import Window
+except ImportError:
+    rasterio = None
+    RasterioIOError = OSError
+    Window = None
 
+from .login import login
 from .constants import *
 from .exceptions import *
 from .HLS_CMR_query import HLS_CMR_query
@@ -32,6 +40,7 @@ __author__ = "Gregory H. Halverson, Evan Davis"
 
 logger = logging.getLogger(__name__)
 
+
 def granule_id(granule: earthaccess.search.DataGranule):
     """
     Extracts the native granule ID from an earthaccess DataGranule object.
@@ -41,6 +50,64 @@ def granule_id(granule: earthaccess.search.DataGranule):
         str: The native granule ID.
     """
     return granule["meta"]["native-id"]
+
+
+def _validate_geotiff(filepath: str, expected_size: int | None = None) -> bool:
+    """
+    Validate that a GeoTIFF exists, matches expected byte size (if provided),
+    and can read an initial raster block without GDAL/rasterio tile errors.
+    """
+    if not exists(filepath):
+        return False
+
+    try:
+        actual_size = os.path.getsize(filepath)
+    except OSError:
+        return False
+
+    if actual_size <= 0:
+        logger.warning(f"Cached file is empty (0 bytes): {filepath}")
+        return False
+
+    if expected_size is not None and actual_size != expected_size:
+        logger.warning(
+            f"Cached file size mismatch for {filepath}: got {actual_size} bytes, expected {expected_size}"
+        )
+        return False
+
+    # Only run raster block verification on GeoTIFFs
+    if not filepath.lower().endswith((".tif", ".tiff")):
+        return True
+
+    if rasterio is not None:
+        try:
+            with rasterio.open(filepath) as ds:
+                if ds.count < 1 or ds.width <= 0 or ds.height <= 0:
+                    return False
+                read_width = min(256, ds.width)
+                read_height = min(256, ds.height)
+                ds.read(1, window=Window(0, 0, read_width, read_height))
+            return True
+        except Exception as e:
+            logger.warning(f"GeoTIFF block integrity check failed for {filepath}: {e}")
+            return False
+    else:
+        try:
+            from osgeo import gdal
+            gdal.UseExceptions()
+            ds = gdal.Open(filepath)
+            if ds is None:
+                return False
+            band = ds.GetRasterBand(1)
+            read_width = min(256, ds.RasterXSize)
+            read_height = min(256, ds.RasterYSize)
+            band.ReadAsArray(0, 0, read_width, read_height)
+            ds = None
+            return True
+        except Exception as e:
+            logger.warning(f"GDAL block integrity check failed for {filepath}: {e}")
+            return False
+
 
 class HLS2Connection:
     """
@@ -92,6 +159,173 @@ class HLS2Connection:
         self._listing = pd.DataFrame([], columns=["date_UTC", "tile", "sentinel", "landsat"])
         self._granules = pd.DataFrame([], columns=["ID", "sensor", "tile", "date_UTC", "granule"])
         self.unavailable_dates = {}  # Track unavailable dates for sensors
+
+        self._cleanup_orphaned_temp_files()
+
+    def _cleanup_orphaned_temp_files(self) -> None:
+        """
+        Remove any orphaned *.tmp* files or staging directories left behind by interrupted runs.
+        """
+        base_dir = abspath(expanduser(self.download_directory))
+        if not exists(base_dir):
+            return
+
+        for pattern in ("**/*.tmp", "**/*.tmp.*"):
+            for orphan in glob.glob(join(base_dir, pattern), recursive=True):
+                try:
+                    if isdir(orphan):
+                        shutil.rmtree(orphan, ignore_errors=True)
+                    else:
+                        os.remove(orphan)
+                    logger.debug(f"Removed orphaned temporary artifact: {orphan}")
+                except OSError as e:
+                    logger.debug(f"Could not remove temporary artifact {orphan}: {e}")
+
+    def _purge_corrupt_cached_files(self, directory: str) -> list[str]:
+        """
+        Scan an existing granule directory for corrupted GeoTIFFs and delete them
+        so earthaccess will re-fetch missing assets.
+        """
+        removed = []
+        if not exists(directory):
+            return removed
+
+        for entry in os.listdir(directory):
+            filepath = join(directory, entry)
+            if os.path.isfile(filepath) and filepath.lower().endswith((".tif", ".tiff")):
+                if not _validate_geotiff(filepath):
+                    logger.warning(f"Quarantining and deleting corrupt cached file: {filepath}")
+                    try:
+                        os.remove(filepath)
+                        removed.append(filepath)
+                    except OSError as e:
+                        logger.error(f"Failed to delete corrupt cached file {filepath}: {e}")
+        return removed
+
+    def _download_granule_atomically(
+            self,
+            granule: earthaccess.search.DataGranule,
+            target_directory: str) -> list[str]:
+        """
+        Download granule files into a staging directory, verify GeoTIFF integrity,
+        and atomically move each file into target_directory via os.replace().
+        """
+        target_directory = abspath(expanduser(target_directory))
+        os.makedirs(target_directory, exist_ok=True)
+
+        # Invalidate any pre-existing corrupt files in target_directory before downloading
+        self._purge_corrupt_cached_files(target_directory)
+
+        staging_dir = tempfile.mkdtemp(prefix=".download.tmp.", dir=target_directory)
+        final_paths = []
+
+        try:
+            # Hard-link or copy already-verified files into staging so earthaccess skips valid bands
+            existing_valid = {}
+            for fname in os.listdir(target_directory):
+                fpath = join(target_directory, fname)
+                if os.path.isfile(fpath) and not fname.startswith(".download.tmp"):
+                    if _validate_geotiff(fpath):
+                        staged_existing = join(staging_dir, fname)
+                        try:
+                            os.link(fpath, staged_existing)
+                        except OSError:
+                            shutil.copy2(fpath, staged_existing)
+                        existing_valid[fname] = fpath
+
+            downloaded_paths = earthaccess.download(granule, staging_dir)
+
+            for item in downloaded_paths:
+                if isinstance(item, Exception):
+                    raise HLSDownloadFailed("Error when downloading HLS2 files") from item
+
+                staged_file = str(item)
+                fname = basename(staged_file)
+                final_file = join(target_directory, fname)
+
+                # If this file was newly downloaded (not one of our pre-validated links), validate it
+                if fname not in existing_valid:
+                    if not _validate_geotiff(staged_file):
+                        raise HLSDownloadFailed(
+                            f"Downloaded file failed GeoTIFF integrity check: {staged_file}"
+                        )
+                    os.replace(staged_file, final_file)
+
+                final_paths.append(final_file)
+
+            return final_paths
+        finally:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+
+    def _retrieve_granule_with_retry(
+            self,
+            granule: earthaccess.search.DataGranule,
+            directory: str,
+            granule_cls: type):
+        """
+        Download and instantiate a granule with automatic quarantine and retries on failure.
+        """
+        max_attempts = max(1, self.retries)
+        last_exception = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                self._download_granule_atomically(granule, directory)
+                return granule_cls(directory)
+            except Exception as e:
+                last_exception = e
+                logger.warning(
+                    f"Granule retrieval attempt {attempt}/{max_attempts} failed for {directory}: {e}"
+                )
+                self._purge_corrupt_cached_files(directory)
+                if attempt < max_attempts:
+                    sleep(self.wait_seconds)
+
+        raise HLSDownloadFailed(
+            f"Failed to retrieve valid HLS2 granule after {max_attempts} attempts: {directory}"
+        ) from last_exception
+
+    def _read_sensor_product(
+            self,
+            sensor_name: str,
+            tile: str,
+            date_UTC: date | str,
+            granule_fetcher: Callable[[], Any],
+            directory_getter: Callable[[], str],
+            reader: Callable[[Any], Raster]) -> Raster:
+        """
+        Read a product/band from a sensor granule. If a GDAL/rasterio read error occurs
+        on a cached GeoTIFF, delete the corrupt files, re-download, and retry.
+        """
+        max_attempts = max(1, self.retries)
+
+        for attempt in range(1, max_attempts + 1):
+            granule_obj = granule_fetcher()
+            try:
+                return reader(granule_obj)
+            except (RasterioIOError, RuntimeError, OSError) as e:
+                logger.warning(
+                    f"Read error on {sensor_name} granule at {tile} on {date_UTC} "
+                    f"(attempt {attempt}/{max_attempts}): {e}"
+                )
+                try:
+                    granule_dir = directory_getter()
+                    removed = self._purge_corrupt_cached_files(granule_dir)
+                    # If block-level scan didn't isolate the bad band, remove all TIFs in that granule dir to force clean re-fetch
+                    if not removed and exists(granule_dir):
+                        for f in os.listdir(granule_dir):
+                            fp = join(granule_dir, f)
+                            if os.path.isfile(fp) and fp.lower().endswith((".tif", ".tiff")):
+                                logger.warning(f"Removing unverified GeoTIFF for re-download: {fp}")
+                                os.remove(fp)
+                except Exception as cleanup_err:
+                    logger.warning(f"Error during corrupt file cleanup: {cleanup_err}")
+
+                if attempt >= max_attempts:
+                    raise HLSBandNotAcquired(
+                        f"Unrecoverable read failure for {sensor_name} at {tile} on {date_UTC}"
+                    ) from e
+                sleep(self.wait_seconds)
 
     def grid(self, tile: str, cell_size: float | None = None, buffer: int = 0) -> RasterGeometry:
         """
@@ -216,16 +450,8 @@ class HLS2Connection:
         granule = self.sentinel_granule(tile=tile, date_UTC=date_UTC)
         directory = self.sentinel_directory(granule, date_UTC=date_UTC)
 
-        # Download the granule using earthaccess
         logger.info(f"retrieving Sentinel tile {cl.name(tile)} on {cl.time(date_UTC)}: {directory}")
-        file_paths = earthaccess.download(granule, abspath(expanduser(directory)))
-        for download_file_path in file_paths:
-            if isinstance(download_file_path, Exception):
-                raise HLSDownloadFailed("Error when downloading HLS2 files") from download_file_path
-
-        hls_granule = HLS2SentinelGranule(directory)
-
-        return hls_granule
+        return self._retrieve_granule_with_retry(granule, directory, HLS2SentinelGranule)
 
     def landsat(self, tile: str, date_UTC: date | str) -> HLS2LandsatGranule:
         """
@@ -247,14 +473,98 @@ class HLS2Connection:
         directory = self.landsat_directory(granule, tile=tile, date_UTC=date_UTC)
 
         logger.info(f"retrieving Landsat tile {cl.name(tile)} on {cl.time(date_UTC)}: {directory}")
-        file_paths = earthaccess.download(granule, abspath(expanduser(directory)))
-        for download_file_path in file_paths:
-            if isinstance(download_file_path, Exception):
-                raise HLSDownloadFailed("Error when downloading HLS2 files") from download_file_path
+        return self._retrieve_granule_with_retry(granule, directory, HLS2LandsatGranule)
 
-        hls_granule = HLS2LandsatGranule(directory)
+    def _compute_composite(
+            self,
+            tile: str,
+            date_UTC: date | str,
+            product_name: str,
+            sentinel_reader: Callable[[HLS2SentinelGranule], Raster],
+            landsat_reader: Callable[[HLS2LandsatGranule], Raster],
+            geometry: RasterGeometry | None = None) -> Raster:
+        """
+        Shared helper for NDVI, albedo, and generic products that safely reads each
+        available sensor with retry-on-corruption and falls back gracefully if one
+        sensor fails.
+        """
+        tile = tile[:5]
+        if geometry is None:
+            geometry = self.grid(tile)
 
-        return hls_granule
+        sentinel_raster = None
+        landsat_raster = None
+        reference_geometry = None
+
+        # 1. Attempt Sentinel-2 (S30)
+        try:
+            sentinel_raster = self._read_sensor_product(
+                sensor_name="Sentinel",
+                tile=tile,
+                date_UTC=date_UTC,
+                granule_fetcher=lambda: self.sentinel(tile=tile, date_UTC=date_UTC),
+                directory_getter=lambda: self.sentinel_directory(
+                    self.sentinel_granule(tile=tile, date_UTC=date_UTC), date_UTC=date_UTC
+                ),
+                reader=sentinel_reader
+            )
+            reference_geometry = sentinel_raster.geometry
+        except HLSSentinelNotAvailable:
+            sentinel_raster = None
+        except HLSSentinelMissing as e:
+            raise e
+        except (HLSBandNotAcquired, HLSDownloadFailed, RasterioIOError, RuntimeError) as e:
+            logger.warning(
+                f"Sentinel {product_name} unavailable/corrupt at {tile} on {date_UTC}; "
+                f"attempting fallback to Landsat: {e}"
+            )
+            sentinel_raster = None
+
+        # 2. Attempt Landsat (L30)
+        try:
+            landsat_raster = self._read_sensor_product(
+                sensor_name="Landsat",
+                tile=tile,
+                date_UTC=date_UTC,
+                granule_fetcher=lambda: self.landsat(tile=tile, date_UTC=date_UTC),
+                directory_getter=lambda: self.landsat_directory(
+                    self.landsat_granule(tile=tile, date_UTC=date_UTC), tile=tile, date_UTC=date_UTC
+                ),
+                reader=landsat_reader
+            )
+            if reference_geometry is None:
+                reference_geometry = landsat_raster.geometry
+        except HLSLandsatNotAvailable:
+            landsat_raster = None
+        except HLSLandsatMissing as e:
+            raise e
+        except (HLSBandNotAcquired, HLSDownloadFailed, RasterioIOError, RuntimeError) as e:
+            logger.warning(
+                f"Landsat {product_name} unavailable/corrupt at {tile} on {date_UTC}; "
+                f"attempting fallback to Sentinel: {e}"
+            )
+            landsat_raster = None
+
+        # 3. Combine or fallback
+        if sentinel_raster is None and landsat_raster is None:
+            raise HLSNotAvailable(f"HLS2 {product_name} is not available at {tile} on {date_UTC}")
+        elif sentinel_raster is not None and landsat_raster is None:
+            result = sentinel_raster
+        elif sentinel_raster is None and landsat_raster is not None:
+            result = landsat_raster
+        else:
+            result = rt.Raster(
+                np.nanmean(np.dstack([sentinel_raster, landsat_raster]), axis=2),
+                geometry=reference_geometry
+            )
+
+        # 4. Resample to target resolution if needed
+        if self.target_resolution > 30:
+            result = result.to_geometry(geometry, resampling="average")
+        elif self.target_resolution < 30:
+            result = result.to_geometry(geometry, resampling="cubic")
+
+        return result
 
     def NDVI(
             self,
@@ -271,50 +581,13 @@ class HLS2Connection:
         Raises:
             HLSNotAvailable: If neither Sentinel nor Landsat data is available.
         """
-        target_tile = tile
-        target_geometry = self.grid(target_tile)
-        tile = tile[:5]
-        geometry = self.grid(tile)
-
-        try:
-            sentinel = self.sentinel(tile=tile, date_UTC=date_UTC)
-        except HLSSentinelNotAvailable:
-            sentinel = None
-        except HLSSentinelMissing as e:
-            raise e
-
-        try:
-            landsat = self.landsat(tile=tile, date_UTC=date_UTC)
-        except HLSLandsatNotAvailable:
-            landsat = None
-        except HLSLandsatMissing as e:
-            raise e
-
-        if sentinel is None and landsat is None:
-            raise HLSNotAvailable(f"HLS2 is not available at {tile} on {date_UTC}")
-        elif sentinel is not None and landsat is None:
-            try:
-                NDVI = sentinel.NDVI
-            except HLSBandNotAcquired as e:
-                logger.error(e)
-                raise HLSNotAvailable(f"HLS2 S30 is not available at {tile} on {date_UTC}")
-        elif sentinel is None and landsat is not None:
-            try:
-                NDVI = landsat.NDVI
-            except HLSBandNotAcquired as e:
-                logger.error(e)
-                raise HLSNotAvailable(f"HLS2 L30 is not available at {tile} on {date_UTC}")
-        else:
-            # Average NDVI from both sensors if available
-            NDVI = rt.Raster(np.nanmean(np.dstack([sentinel.NDVI, landsat.NDVI]), axis=2), geometry=sentinel.geometry)
-
-        # Resample NDVI to target resolution if needed
-        if self.target_resolution > 30:
-            NDVI = NDVI.to_geometry(geometry, resampling="average")
-        elif self.target_resolution < 30:
-            NDVI = NDVI.to_geometry(geometry, resampling="cubic")
-        
-        return NDVI
+        return self._compute_composite(
+            tile=tile,
+            date_UTC=date_UTC,
+            product_name="NDVI",
+            sentinel_reader=lambda s: s.NDVI,
+            landsat_reader=lambda l: l.NDVI
+        )
 
     def albedo(
             self,
@@ -331,49 +604,13 @@ class HLS2Connection:
         Raises:
             HLSNotAvailable: If neither Sentinel nor Landsat data is available.
         """
-        target_tile = tile
-        target_geometry = self.grid(target_tile)
-        tile = tile[:5]
-        geometry = self.grid(tile)
-
-        try:
-            sentinel = self.sentinel(tile=tile, date_UTC=date_UTC)
-        except HLSSentinelNotAvailable:
-            sentinel = None
-        except HLSSentinelMissing as e:
-            raise e
-
-        try:
-            landsat = self.landsat(tile=tile, date_UTC=date_UTC)
-        except HLSLandsatNotAvailable:
-            landsat = None
-        except HLSLandsatMissing as e:
-            raise e
-
-        if sentinel is None and landsat is None:
-            raise HLSNotAvailable(f"HLS2 is not available at {tile} on {date_UTC}")
-        elif sentinel is not None and landsat is None:
-            try:
-                albedo = sentinel.albedo
-            except HLSBandNotAcquired:
-                raise HLSNotAvailable(f"HLS2 S30 is not available at {tile} on {date_UTC}")
-        elif sentinel is None and landsat is not None:
-            try:
-                albedo = landsat.albedo
-            except HLSBandNotAcquired:
-                raise HLSNotAvailable(f"HLS2 L30 is not available at {tile} on {date_UTC}")
-        else:
-            # Average albedo from both sensors if available
-            albedo = rt.Raster(np.nanmean(np.dstack([sentinel.albedo, landsat.albedo]), axis=2),
-                               geometry=sentinel.geometry)
-
-        # Resample albedo to target resolution if needed
-        if self.target_resolution > 30:
-            albedo = albedo.to_geometry(geometry, resampling="average")
-        elif self.target_resolution < 30:
-            albedo = albedo.to_geometry(geometry, resampling="cubic")
-        
-        return albedo
+        return self._compute_composite(
+            tile=tile,
+            date_UTC=date_UTC,
+            product_name="albedo",
+            sentinel_reader=lambda s: s.albedo,
+            landsat_reader=lambda l: l.albedo
+        )
 
     def search(
             self,
@@ -657,7 +894,9 @@ class HLS2Connection:
         if isinstance(granule, float) and np.isnan(granule):
             self.mark_date_unavailable("Landsat", tile, date_UTC)
             error_string = f"Landsat is not available at tile {cl.place(tile)} on {cl.time(date_UTC)}"
-            most_recent_listing = listing[listing.landsat.apply(lambda landsat: not (landsat == "missing" or (isinstance(granule, float) and np.isnan(granule))))]
+            most_recent_listing = listing[listing.landsat.apply(
+                lambda landsat: not (landsat == "missing" or (isinstance(landsat, float) and np.isnan(landsat)))
+            )]
 
             if len(most_recent_listing) > 0:
                 most_recent = most_recent_listing.iloc[-1].landsat
@@ -689,53 +928,16 @@ class HLS2Connection:
         Raises:
             HLSNotAvailable: If neither Sentinel nor Landsat data is available.
         """
-        target_tile = tile
-        target_geometry = self.grid(target_tile)
-        tile = tile[:5]
+        def _read_granule_attr(granule_obj):
+            if hasattr(granule_obj, product):
+                return getattr(granule_obj, product)
+            return granule_obj.product(product)
 
-        if geometry is None:
-            geometry = self.grid(tile)
-
-        try:
-            sentinel = self.sentinel(tile=tile, date_UTC=date_UTC)
-        except HLSSentinelNotAvailable:
-            sentinel = None
-        except HLSSentinelMissing as e:
-            raise e
-
-        try:
-            landsat = self.landsat(tile=tile, date_UTC=date_UTC)
-        except HLSLandsatNotAvailable:
-            landsat = None
-        except HLSLandsatMissing as e:
-            raise e
-
-
-        if sentinel is None and landsat is None:
-            raise HLSNotAvailable(f"HLS2 is not available at {tile} on {date_UTC}")
-        elif sentinel is not None and landsat is None:
-            try:
-                image = sentinel.product(product)
-            except Exception as e:
-                raise HLSNotAvailable(f"Sentinel product '{product}' is not available at {tile} on {date_UTC}") from e
-        elif sentinel is None and landsat is not None:
-            try:
-                image = landsat.product(product)
-            except Exception as e:
-                raise HLSNotAvailable(f"Landsat product '{product}' is not available at {tile} on {date_UTC}") from e
-        else:
-            # Average NDVI from both sensors if available (for NDVI product)
-            try:
-                sentinel_data = getattr(sentinel, product)
-                landsat_data = getattr(landsat, product)
-            except AttributeError as e:
-                raise HLSNotAvailable(f"Product '{product}' is not available from both sensors at {tile} on {date_UTC}") from e
-            image = rt.Raster(np.nanmean(np.dstack([sentinel_data, landsat_data]), axis=2), geometry=sentinel.geometry)
-
-        # Resample image to target resolution if needed
-        if self.target_resolution > 30:
-            image = image.to_geometry(geometry, resampling="average")
-        elif self.target_resolution < 30:
-            image = image.to_geometry(geometry, resampling="cubic")
-
-        return image
+        return self._compute_composite(
+            tile=tile,
+            date_UTC=date_UTC,
+            product_name=product,
+            sentinel_reader=_read_granule_attr,
+            landsat_reader=_read_granule_attr,
+            geometry=geometry
+        )
